@@ -45,6 +45,26 @@ S         = Cfg.S;
 Z         = Cfg.Z;
 horizons  = Cfg.HORIZONS_RESTRICT;   % horizonte(s) sobre los que se restringen
 
+%% ── Normalizar Z: cada Z{i} debe ser zeros(zi, numel(horizons)*n) ────────
+% El original inicializa explicitamente:
+%   for i=1:nvar, Z{i}=zeros(0,numel(horizons)*nvar); end
+% Si Cfg.Z{i} es [] (vacio, 0x0), ZIRF falla con error de dimensiones.
+% Convertir [] a zeros(0, numel(horizons)*n) para que la multiplicacion
+% Z{i}*IRF sea [0x(H*n)] * [(H*n)xn] = [0xn] (valida).
+nH = numel(horizons);   % numero de horizontes restringidos
+for i = 1:n
+    if isempty(Z{i})
+        Z{i} = zeros(0, nH * n);
+    end
+end
+
+%% ── Normalizar S de la misma manera ──────────────────────────────────────
+for i = 1:n
+    if isempty(S{i})
+        S{i} = zeros(0, nH * n);
+    end
+end
+
 %% ── Funcion de Cholesky (igual que el original: hh = chol(x)') ──────────
 hh = @(x) chol(x)';
 
@@ -82,10 +102,6 @@ storevefh   = zeros(nd, 1);   % log volume element f_h
 storevegfhZ = zeros(nd, 1);   % log volume element g o f_h | Z
 uw          = zeros(nd, 1);   % pesos sin normalizar
 
-%% ── Preparar Cholesky de OomegaTilde (ya calculado en build_posterior) ──
-% El original usa: cholOomegaTilde = hh(OomegaTilde)'
-% build_posterior.m ya lo calcula como chol(OomegaTilde)'
-
 %% ── Loop IS: Algoritmo 2 + calculo de pesos (Algoritmo 3) ───────────────
 counter = 1;
 record  = 1;
@@ -121,7 +137,7 @@ while record <= nd
         switch conjugate
 
             case 'structural'
-                % log volume element de f_h en (A0,A+)
+                % log volume element de f_h en (A0,A+):
                 % = (n(n+1)/2)*log(2) - (2n+m+1)*log|det(A0)|
                 storevefh(record, 1)   = (n*(n+1)/2)*log(2) ...
                     - (2*n + m + 1) * LogAbsDet(reshape(structpara(1:n*n), n, n));
