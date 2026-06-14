@@ -1,10 +1,10 @@
 %VALIDATE_FASE1  Script de validacion para Fase 1 — Esqueleto y data loader.
 %
 %   Verifica:
-%     (a) main.m existe y es localizable desde cualquier working directory
+%     (a) main.m existe y no usa rutas relativas prohibidas
 %     (b) load_data.m lee data_bnw.xlsx y retorna Dataset con campos correctos
 %     (c) Dataset.nvar == 5, Dataset.nvar_total == 5
-%     (d) Las rutas internas NO contienen '..' ni dependen de pwd
+%     (d) Las rutas internas no dependen de pwd ni usan cd/'..'
 %
 %   EJECUTAR desde CUALQUIER directorio:
 %       run('/ruta/absoluta/refactored/validate/validate_fase1.m')
@@ -20,23 +20,24 @@ fprintf('=================================================================\n\n')
 
 PASS = true;
 
-%% -- Localizar proj_root de forma robusta ---------------------------------
-% mfilename('fullpath') devuelve '' cuando el script se ejecuta via 'run'
-% desde un directorio distinto en versiones antiguas de MATLAB.
-% Solucion robusta: buscar el archivo validate_fase1.m en el path de MATLAB.
+%% -- Localizar proj_root de forma robusta --------------------------------
+% which() funciona desde cualquier directorio siempre que el script
+% este en el path de MATLAB (addpath) o se use run() con ruta absoluta.
 this_file = which('validate_fase1');
 if isempty(this_file)
-    % Fallback: asumir que estamos en validate/ o en proj_root
-    candidate = fullfile(pwd, 'validate', 'validate_fase1.m');
+    % Fallback 1: estamos dentro de validate/
+    candidate = fullfile(pwd, 'validate_fase1.m');
     if isfile(candidate)
         this_file = candidate;
     else
-        candidate2 = fullfile(pwd, 'validate_fase1.m');
+        % Fallback 2: estamos en proj_root
+        candidate2 = fullfile(pwd, 'validate', 'validate_fase1.m');
         if isfile(candidate2)
             this_file = candidate2;
         else
-            error(['No se puede localizar validate_fase1.m. ' ...
-                   'Ejecuta desde refactored/ o desde refactored/validate/.']);
+            error(['No se puede localizar validate_fase1.m automaticamente.\n' ...
+                   'Ejecuta con ruta absoluta:\n' ...
+                   '  run(''/ruta/a/refactored/validate/validate_fase1.m'')']);
         end
     end
 end
@@ -44,45 +45,50 @@ end
 val_dir   = fileparts(this_file);   % .../refactored/validate/
 proj_root = fileparts(val_dir);     % .../refactored/
 
-% Añadir src/ y config/ al path
+% Añadir src/ y config/ al path para que load_data sea accesible
 addpath(fullfile(proj_root, 'src'));
 addpath(fullfile(proj_root, 'config'));
 
 fprintf('Raiz del proyecto detectada:\n  %s\n\n', proj_root);
 
-%% -- CHECK A: main.m existe y no usa rutas prohibidas --------------------
+%% -- Funcion auxiliar: extraer solo codigo ejecutable (sin comentarios) --
+% Necesaria para distinguir '..' en rutas vs '...' de continuacion de linea
+strip_comments = @(txt) regexprep(txt, '%[^\n]*', '');
+
+% Patron para rutas relativas prohibidas: '..' seguido de '/' o '\'
+% El '...' de continuacion de linea MATLAB NO activa este patron
+DOTDOT_PATTERN = '\.\.[/\\]';
+
+%% -- CHECK A: main.m existe y no usa rutas prohibidas -------------------
 fprintf('--- CHECK A: Existencia de main.m ---\n');
 main_path = fullfile(proj_root, 'main.m');
 
 if isfile(main_path)
     fprintf('  [OK] main.m encontrado en: %s\n', main_path);
 
-    fid = fopen(main_path, 'r');
-    raw = fread(fid, '*char')';
+    fid  = fopen(main_path, 'r');
+    raw  = fread(fid, '*char')';
     fclose(fid);
+    code = strip_comments(raw);
 
-    % Eliminar comentarios antes de buscar patrones prohibidos
-    % Un comentario en MATLAB empieza con % hasta fin de linea
-    code_only = regexprep(raw, '%[^\n]*', '');
-
-    has_pwd    = ~isempty(regexp(code_only, '\bpwd\b',   'once'));
-    has_cd     = ~isempty(regexp(code_only, '\bcd\s*\(', 'once'));
-    has_dotdot = ~isempty(regexp(code_only, '\.\.',       'once'));
+    has_pwd    = ~isempty(regexp(code, '\bpwd\b',       'once'));
+    has_cd     = ~isempty(regexp(code, '\bcd\s*[\(\''"]', 'once'));
+    has_dotdot = ~isempty(regexp(code, DOTDOT_PATTERN,   'once'));
 
     if has_pwd
-        fprintf('  [WARN] main.m contiene ''pwd'' en codigo (no en comentarios)\n');
+        fprintf('  [WARN] main.m contiene ''pwd'' en codigo ejecutable\n');
         PASS = false;
     end
     if has_cd
-        fprintf('  [WARN] main.m contiene ''cd('' en codigo (no en comentarios)\n');
+        fprintf('  [WARN] main.m contiene ''cd('' en codigo ejecutable\n');
         PASS = false;
     end
     if has_dotdot
-        fprintf('  [WARN] main.m contiene ''..'' en codigo (no en comentarios)\n');
+        fprintf('  [WARN] main.m contiene ruta relativa ''../'' en codigo ejecutable\n');
         PASS = false;
     end
     if ~has_pwd && ~has_cd && ~has_dotdot
-        fprintf('  [OK] main.m no usa pwd, cd ni .. (en codigo ejecutable)\n');
+        fprintf('  [OK] main.m no usa pwd, cd ni rutas relativas ..\n');
     end
 else
     fprintf('  [FAIL] main.m NO encontrado en: %s\n', main_path);
@@ -97,31 +103,30 @@ ld_path = fullfile(proj_root, 'src', 'load_data.m');
 if isfile(ld_path)
     fprintf('  [OK] load_data.m encontrado en: %s\n', ld_path);
 
-    fid = fopen(ld_path, 'r');
-    raw = fread(fid, '*char')';
+    fid  = fopen(ld_path, 'r');
+    raw  = fread(fid, '*char')';
     fclose(fid);
+    code = strip_comments(raw);
 
-    code_only = regexprep(raw, '%[^\n]*', '');
-
-    has_pwd      = ~isempty(regexp(code_only, '\bpwd\b',    'once'));
-    has_cd       = ~isempty(regexp(code_only, '\bcd\s*\(',  'once'));
-    has_dotdot   = ~isempty(regexp(code_only, '\.\.',        'once'));
-    has_mfile    = ~isempty(regexp(raw,       'mfilename',   'once'));
+    has_pwd      = ~isempty(regexp(code, '\bpwd\b',         'once'));
+    has_cd       = ~isempty(regexp(code, '\bcd\s*[\(\''"]', 'once'));
+    has_dotdot   = ~isempty(regexp(code, DOTDOT_PATTERN,    'once'));
+    has_mfile    = ~isempty(regexp(raw,  'mfilename',        'once'));
 
     if has_pwd
-        fprintf('  [WARN] load_data.m contiene ''pwd'' en codigo\n');
+        fprintf('  [WARN] load_data.m contiene ''pwd'' en codigo ejecutable\n');
         PASS = false;
     end
     if has_cd
-        fprintf('  [WARN] load_data.m contiene ''cd('' en codigo\n');
+        fprintf('  [WARN] load_data.m contiene ''cd('' en codigo ejecutable\n');
         PASS = false;
     end
     if has_dotdot
-        fprintf('  [WARN] load_data.m contiene ''..'' en codigo\n');
+        fprintf('  [WARN] load_data.m contiene ruta relativa ''../'' en codigo ejecutable\n');
         PASS = false;
     end
     if ~has_pwd && ~has_cd && ~has_dotdot
-        fprintf('  [OK] load_data.m no usa pwd, cd ni .. (en codigo ejecutable)\n');
+        fprintf('  [OK] load_data.m no usa pwd, cd ni rutas relativas ..\n');
     end
     if has_mfile
         fprintf('  [OK] load_data.m usa mfilename para calcular rutas\n');
