@@ -1,0 +1,14 @@
+# Outputs binarios — nunca van al repo
+output/figures/
+output/results/
+*.mat
+*.png
+*.eps
+*.fig
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+
+# Carpetas vacías (excepto las marcadas con .gitkeep)
+# helpfunctions/ se gestiona por separado
