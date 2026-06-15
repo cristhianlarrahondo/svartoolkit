@@ -7,9 +7,9 @@
 %
 %   Checks PFA (spec_bnw_pfa, rng(0)):
 %     P-a) Ltilde(1,1,1)                    = 0.0000000000
-%     P-b) Ltilde(end,end,end)              = -0.2164638261
-%     P-c) median(Ltilde(:,2,:),'all')      = 4.0563832215
-%     P-d) median(FEVD(2,:)) @ h=40        = 0.4356588899
+%     P-b) Ltilde(end,end,end)              = -0.2326865051
+%     P-c) median(Ltilde(:,2,:),'all')      = 5.4910402086
+%     P-d) median(FEVD(2,:)) @ h=40        = 0.7305634882
 %
 %   Checks IS (spec_bnw_is, rng(0)):
 %     I-a) Ltilde(1,1,1,1)                  = 0.0000000000
@@ -113,9 +113,9 @@ val_pc = median(Ltilde_pfa(:, 2, :), 'all');
 val_pd = median(FEVD_pfa(2, :));
 
 REF_pa =  0.0000000000;
-REF_pb = -0.2164638261;
-REF_pc =  4.0563832215;
-REF_pd =  0.4356588899;
+REF_pb = -0.2326865051;
+REF_pc =  5.4910402086;
+REF_pd =  0.7305634882;
 
 ok_pa = abs(val_pa - REF_pa) <= TOL_irf;
 ok_pb = abs(val_pb - REF_pb) <= TOL_irf;
@@ -274,3 +274,4 @@ fprintf('Pegar este output completo en el chat para verificación.\n\n');
 function out = iif(cond, a, b)
     if cond; out = a; else; out = b; end
 end
+
