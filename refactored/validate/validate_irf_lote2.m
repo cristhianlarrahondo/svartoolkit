@@ -65,7 +65,8 @@ Results_is = run_is(Posterior_is, Cfg_is);
 fprintf('Listo.\n\n');
 
 tol     = 1e-6;
-all_pass = true;
+all_pass    = true;
+failed_tags = {};   % acumula tags de secciones que fallan
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  A — REGRESIÓN NUMÉRICA
@@ -82,7 +83,7 @@ p3 = check_val(median(Lp(:,2,:),'all'), 5.4910402086, tol, 'median(Ltilde(:,2,:)
 p4 = check_val(median(FEVDp(2,:)),    0.7305634882, tol, 'median(FEVD(2,:))');
 pass_A1 = p1&&p2&&p3&&p4;
 all_pass = all_pass && pass_A1;
-emit(pass_A1, 'A1');
+[all_pass, failed_tags] = emit(pass_A1, 'A1', all_pass, failed_tags);
 
 %% A2 — IS
 fprintf('--- A2: spec_bnw_is ---\n');
@@ -94,7 +95,7 @@ p3 = check_val(median(Li(:,2,1,:),'all'),  2.9521795528, tol, 'median(Ltilde(:,2
 p4 = check_val(median(FEVDi(2,:)),         0.2580366201, tol, 'median(FEVD(2,:))');
 pass_A2 = p1&&p2&&p3&&p4;
 all_pass = all_pass && pass_A2;
-emit(pass_A2, 'A2');
+[all_pass, failed_tags] = emit(pass_A2, 'A2', all_pass, failed_tags);
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  B — INTEGRACIÓN FUNCIONAL
@@ -115,7 +116,7 @@ catch ME
     fprintf('  Error capturado: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B1;
-emit(pass_B1, 'B1');
+[all_pass, failed_tags] = emit(pass_B1, 'B1', all_pass, failed_tags);
 
 %% B2 — validate_cfg detecta tipo incorrecto
 fprintf('--- B2: validate_cfg tipo incorrecto ---\n');
@@ -130,7 +131,7 @@ catch ME
     fprintf('  Error capturado: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B2;
-emit(pass_B2, 'B2');
+[all_pass, failed_tags] = emit(pass_B2, 'B2', all_pass, failed_tags);
 
 %% B3 — validate_cfg pasa con Cfg válida
 fprintf('--- B3: validate_cfg Cfg valida ---\n');
@@ -142,7 +143,7 @@ catch ME
     fprintf('  Error inesperado: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B3;
-emit(pass_B3, 'B3');
+[all_pass, failed_tags] = emit(pass_B3, 'B3', all_pass, failed_tags);
 
 %% B4 — print_run_summary modo PFA
 fprintf('--- B4: print_run_summary PFA ---\n');
@@ -154,7 +155,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B4;
-emit(pass_B4, 'B4');
+[all_pass, failed_tags] = emit(pass_B4, 'B4', all_pass, failed_tags);
 
 %% B5 — print_run_summary modo IS
 fprintf('--- B5: print_run_summary IS ---\n');
@@ -166,7 +167,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B5;
-emit(pass_B5, 'B5');
+[all_pass, failed_tags] = emit(pass_B5, 'B5', all_pass, failed_tags);
 
 %% B6 — Alerta E3 se dispara cuando tasa < umbral
 fprintf('--- B6: alerta E3 tasa baja (debe dispararse) ---\n');
@@ -192,7 +193,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B6;
-emit(pass_B6, 'B6');
+[all_pass, failed_tags] = emit(pass_B6, 'B6', all_pass, failed_tags);
 
 %% B7 — Alerta E3 no se dispara cuando tasa >= umbral
 fprintf('--- B7: alerta E3 tasa OK (no debe dispararse) ---\n');
@@ -213,7 +214,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B7;
-emit(pass_B7, 'B7');
+[all_pass, failed_tags] = emit(pass_B7, 'B7', all_pass, failed_tags);
 
 %% ── Lote 2 ───────────────────────────────────────────────────────────────
 
@@ -245,7 +246,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B8;
-emit(pass_B8, 'B8');
+[all_pass, failed_tags] = emit(pass_B8, 'B8', all_pass, failed_tags);
 
 %% B9 — select_irfs IS subconjunto shock_idx=1, response_idx=[1,3]
 fprintf('--- B9: select_irfs IS shock=1 response=[1,3] ---\n');
@@ -266,7 +267,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B9;
-emit(pass_B9, 'B9');
+[all_pass, failed_tags] = emit(pass_B9, 'B9', all_pass, failed_tags);
 
 %% B10 — compute_cirfs: valores algebraicamente correctos con array real PFA
 fprintf('--- B10: compute_cirfs array real PFA ---\n');
@@ -289,7 +290,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B10;
-emit(pass_B10, 'B10');
+[all_pass, failed_tags] = emit(pass_B10, 'B10', all_pass, failed_tags);
 
 %% B11 — normalize_irfs 'none': identidad exacta
 fprintf('--- B11: normalize_irfs none ---\n');
@@ -305,7 +306,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B11;
-emit(pass_B11, 'B11');
+[all_pass, failed_tags] = emit(pass_B11, 'B11', all_pass, failed_tags);
 
 %% B12 — normalize_irfs 'own_unit': h=0 de cada var → 1 por draw
 fprintf('--- B12: normalize_irfs own_unit ---\n');
@@ -332,7 +333,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B12;
-emit(pass_B12, 'B12');
+[all_pass, failed_tags] = emit(pass_B12, 'B12', all_pass, failed_tags);
 
 %% B13 — normalize_irfs 'unit': var/horizonte/valor objetivo cumplidos
 fprintf('--- B13: normalize_irfs unit ---\n');
@@ -355,7 +356,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B13;
-emit(pass_B13, 'B13');
+[all_pass, failed_tags] = emit(pass_B13, 'B13', all_pass, failed_tags);
 
 %% B14 — normalize_irfs '1sd': escala draw-by-draw verificada
 fprintf('--- B14: normalize_irfs 1sd ---\n');
@@ -385,7 +386,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B14;
-emit(pass_B14, 'B14');
+[all_pass, failed_tags] = emit(pass_B14, 'B14', all_pass, failed_tags);
 
 %% B15-B20 — plot_irfs: verificaciones funcionales (sin crashes)
 % Para estas secciones usamos un número reducido de draws para rapidez
@@ -411,7 +412,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B15;
-emit(pass_B15, 'B15');
+[all_pass, failed_tags] = emit(pass_B15, 'B15', all_pass, failed_tags);
 
 %% B16 — IRF_TYPE='cirf'
 fprintf('--- B16: plot_irfs IRF_TYPE=cirf ---\n');
@@ -426,7 +427,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B16;
-emit(pass_B16, 'B16');
+[all_pass, failed_tags] = emit(pass_B16, 'B16', all_pass, failed_tags);
 
 %% B17 — IRF_TYPE='both'
 fprintf('--- B17: plot_irfs IRF_TYPE=both ---\n');
@@ -441,7 +442,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B17;
-emit(pass_B17, 'B17');
+[all_pass, failed_tags] = emit(pass_B17, 'B17', all_pass, failed_tags);
 
 %% B18 — CRED_BANDS=[0.16 0.84; 0.05 0.95] (dos bandas)
 fprintf('--- B18: plot_irfs dos bandas ---\n');
@@ -457,7 +458,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B18;
-emit(pass_B18, 'B18');
+[all_pass, failed_tags] = emit(pass_B18, 'B18', all_pass, failed_tags);
 
 %% B19 — IRF_NORM='own_unit' aplicado en plot (valores h=0 → ~1 en mediana)
 fprintf('--- B19: plot_irfs IRF_NORM=own_unit ---\n');
@@ -473,7 +474,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B19;
-emit(pass_B19, 'B19');
+[all_pass, failed_tags] = emit(pass_B19, 'B19', all_pass, failed_tags);
 
 %% B20 — IRF_NORM='1sd' con Results pasado como 4to arg
 fprintf('--- B20: plot_irfs IRF_NORM=1sd con Results ---\n');
@@ -492,7 +493,7 @@ catch ME
     fprintf('  Error: %s\n', ME.message);
 end
 all_pass = all_pass && pass_B20;
-emit(pass_B20, 'B20');
+[all_pass, failed_tags] = emit(pass_B20, 'B20', all_pass, failed_tags);
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  VEREDICTO GLOBAL
@@ -503,7 +504,10 @@ if all_pass
     fprintf('  Regresion numerica y todas las integraciones OK.\n');
 else
     fprintf('  VEREDICTO GLOBAL: NO PASA\n');
-    fprintf('  Revisar secciones marcadas NO PASA arriba.\n');
+    fprintf('  Secciones con falla:\n');
+    for kk = 1:numel(failed_tags)
+        fprintf('    - %s\n', failed_tags{kk});
+    end
 end
 fprintf('============================================================\n\n');
 
@@ -521,11 +525,15 @@ function pass = check_val(val, ref, tol, name)
     end
 end
 
-function emit(pass, tag)
+function [all_pass_out, failed_out] = emit(pass, tag, all_pass_in, failed_in)
     if pass
         fprintf('  Resultado %s: PASA\n\n', tag);
+        all_pass_out = all_pass_in;
+        failed_out   = failed_in;
     else
         fprintf('  Resultado %s: NO PASA\n\n', tag);
+        all_pass_out = false;
+        failed_out   = [failed_in, {tag}];
     end
 end
 
@@ -543,3 +551,4 @@ function check_e3_alert(Results, Cfg)
         fprintf('             Considera aumentar ND o relajar las restricciones.\n');
     end
 end
+
