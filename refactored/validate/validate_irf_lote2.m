@@ -398,15 +398,18 @@ all_pass = all_pass && pass_B14;
 [all_pass, failed_tags] = emit(pass_B14, 'B14', all_pass, failed_tags);
 
 %% B15-B20 — plot_irfs: verificaciones funcionales (sin crashes)
-% Para estas secciones usamos un número reducido de draws para rapidez
+% Usamos 50 draws para rapidez y un LtildeStruct con modo 'validate'
+% para que plot_irfs guarde las figuras de test en nombres separados,
+% sin pisar irfs_pfa.png de producción.
 
-% Construir LtildeStruct reducida (primeros 50 draws)
-LS_small = LS_pfa;
+% LtildeStruct reducida (primeros 50 draws) con modo de test
+LS_small        = LS_pfa;
 LS_small.data   = LS_pfa.data(:, :, 1:50);
 LS_small.ndraws = 50;
+LS_small.mode   = 'validate';   % guarda como irfs_validate.png, cirfs_validate.png
 
 Cfg_plot = Cfg_pfa;
-Cfg_plot.PLOT_IRFS = false;   % evitar que main vuelva a graficar
+Cfg_plot.PLOT_IRFS = false;
 
 %% B15 — IRF_TYPE='irf'
 fprintf('--- B15: plot_irfs IRF_TYPE=irf ---\n');
@@ -469,7 +472,7 @@ end
 all_pass = all_pass && pass_B18;
 [all_pass, failed_tags] = emit(pass_B18, 'B18', all_pass, failed_tags);
 
-%% B19 — IRF_NORM='own_unit' aplicado en plot (valores h=0 → ~1 en mediana)
+%% B19 — IRF_NORM='own_unit' aplicado en plot
 fprintf('--- B19: plot_irfs IRF_NORM=own_unit ---\n');
 try
     Cfg_b19 = Cfg_plot;
@@ -485,14 +488,13 @@ end
 all_pass = all_pass && pass_B19;
 [all_pass, failed_tags] = emit(pass_B19, 'B19', all_pass, failed_tags);
 
-%% B20 — IRF_NORM='1sd' con Results pasado como 4to arg
+%% B20 — IRF_NORM='1sd' con Results como 4to arg
 fprintf('--- B20: plot_irfs IRF_NORM=1sd con Results ---\n');
 try
     Cfg_b20 = Cfg_plot;
     Cfg_b20.IRF_TYPE       = 'irf';
     Cfg_b20.IRF_NORM       = '1sd';
     Cfg_b20.NORM_SHOCK_IDX = 1;
-    % Construir Results reducido con Sigmadraws de los 50 draws
     Results_small = struct('Sigmadraws', {Results_pfa.Sigmadraws(1:50)});
     plot_irfs(LS_small, Dataset_pfa, Cfg_b20, Results_small);
     close all;
