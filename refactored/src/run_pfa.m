@@ -78,14 +78,10 @@ while record <= nd
     Sigmadraws{record,1} = Sigmadraw;
 
     %% ── PFA de Mountford y Uhlig (2009) ─────────────────────────────────
-    % hSigmadraw = chol(Sigmadraw)' = lower triangular
-    % (igual que hh(Sigmadraw)' en el original donde hh=@(x)chol(x) upper)
-    hSigmadraw = hh(Sigmadraw);
     % objective: vector fila para la restriccion de signo (stock prices > 0)
-    % e(2,:) * hSigmadraw replica e(2,:)*chol(Sigmadraw)' del original
-    objective = e(2,:) * hSigmadraw;
+    objective = e(2,:) * hh(Sigmadraw)';
     % Aeq, beq: restriccion lineal de cero (TFP = 0 en h=0)
-    Aeq = e(1,:) * hSigmadraw;
+    Aeq = e(1,:) * hh(Sigmadraw)';
     beq = 0;
     % Punto inicial aleatorio
     q1ga = rand(n, 1);
@@ -97,7 +93,7 @@ while record <= nd
     Qdraws{record, 1} = q;
 
     %% ── Matriz F para IRFs (igual que el original) ───────────────────────
-    % hSigmadraw ya calculado arriba — reutilizar
+    hSigmadraw = hh(Sigmadraw);
     A0         = hSigmadraw \ e;
     Aplus      = Bdraw * A0;
     for l = 1:p-1
