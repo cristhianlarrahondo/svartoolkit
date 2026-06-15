@@ -2,12 +2,14 @@ function main(spec_name)
 %MAIN  Punto de entrada único del SVAR Toolkit refactorizado.
 %
 %   MAIN(SPEC_NAME) carga la configuración especificada por SPEC_NAME,
-%   construye la estructura Cfg y despacha al runner correspondiente
-%   (run_pfa o run_is) según Cfg.MODE.
+%   construye la struct Cfg y despacha al runner correspondiente
+%   según Cfg.MODE: 'pfa', 'is' ó 'timing'.
 %
 %   Ejemplo:
 %       main('spec_bnw_pfa')
 %       main('spec_bnw_is')
+%       main('spec_timing_4L1Z')
+%       main('spec_timing_12L3Z')
 %
 %   Convenciones de ruta: NUNCA se usa pwd, cd, ni '..'.
 %   Cada archivo calcula su ubicación con fileparts(mfilename('fullpath')).
@@ -15,7 +17,7 @@ function main(spec_name)
 %% ── Localizar raíz del proyecto ─────────────────────────────────────────
 proj_root = fileparts(mfilename('fullpath'));   % .../refactored/
 
-%% ── Añadir src/ y config/ al path ──────────────────────────────────────
+%% ── Añadir src/, config/ y helpfunctions/ al path ───────────────────────
 addpath(fullfile(proj_root, 'src'));
 addpath(fullfile(proj_root, 'config'));
 addpath(fullfile(proj_root, 'helpfunctions'));
@@ -33,42 +35,66 @@ if ~isfile(cfg_path)
         'Config file no encontrado: %s', cfg_path);
 end
 
-% Ejecutar el script de config; popula la variable Cfg en el workspace
-% de esta función (run no crea variables en el caller por defecto;
-% usamos evalin para capturar Cfg después de run).
-run(cfg_path);                  % <-- popula Cfg en este workspace
+% Los configs nuevos (timing) son funciones que devuelven Cfg.
+% Los configs anteriores (pfa, is) son scripts que populan Cfg.
+% Detectar por la primera línea: si empieza con 'function', es función.
+fid  = fopen(cfg_path, 'r');
+line = strtrim(fgetl(fid));
+fclose(fid);
 
-%% ── Inyectar ruta de datos si está vacía ────────────────────────────────
-if isempty(Cfg.DATA_FILE)
-    Cfg.DATA_FILE = '';         % load_data resolverá la ruta absoluta
+if startsWith(line, 'function')
+    % Config tipo función: llamar por nombre y recibir Cfg
+    cfg_func = str2func(spec_name);
+    Cfg = cfg_func();
+else
+    % Config tipo script: run() popula Cfg en este workspace
+    run(cfg_path);
 end
 
-%% ── Cargar datos ────────────────────────────────────────────────────────
-Dataset = load_data(Cfg);
+%% ── Cargar datos según modo ─────────────────────────────────────────────
+if strcmp(Cfg.MODE, 'timing')
+    Dataset = load_data_timing(Cfg);
+else
+    if isempty(Cfg.DATA_FILE)
+        Cfg.DATA_FILE = '';
+    end
+    Dataset = load_data(Cfg);
+end
 
 %% ── Construir posterior NIW ─────────────────────────────────────────────
-PosteriorParams = build_posterior(Dataset, Cfg);
+Posterior = build_posterior(Dataset, Cfg);
 
 %% ── Despachar según modo ────────────────────────────────────────────────
-rng(Cfg.SEED);   % fijar semilla antes del loop de muestreo
-
 switch lower(Cfg.MODE)
     case 'pfa'
-        Results = run_pfa(PosteriorParams, Cfg);
+        rng(Cfg.SEED);
+        Results = run_pfa(Posterior, Cfg);
+
     case 'is'
-        Results = run_is(PosteriorParams, Cfg);
+        rng(Cfg.SEED);
+        Results = run_is(Posterior, Cfg);
+
+    case 'timing'
+        % run_timing gestiona su propio rng internamente
+        Results = run_timing(Cfg, Dataset, Posterior);
+        fprintf('\n=== Timing %d completado ===\n', Cfg.TIMING_VARIANT);
+        fprintf('  tElapsed : %.1f seg\n', Results.tElapsed);
+        fprintf('  count    : %d draws satisfacen signs\n', Results.count);
+        fprintf('  ESS      : %d\n', Results.ne);
+        fprintf('  ESS/count: %.4f\n', Results.ne / max(Results.count, 1));
+
     otherwise
         error('main:unknownMode', ...
-            'Cfg.MODE desconocido: ''%s''. Usa ''pfa'' o ''is''.', Cfg.MODE);
+            'Cfg.MODE desconocido: ''%s''. Usa ''pfa'', ''is'' o ''timing''.', Cfg.MODE);
 end
 
-%% ── Plotting ────────────────────────────────────────────────────────────
-if Cfg.PLOT_IRFS
+%% ── Plotting (sólo modos pfa/is) ────────────────────────────────────────
+if ismember(lower(Cfg.MODE), {'pfa', 'is'}) && Cfg.PLOT_IRFS
     plot_irfs(Results.LtildeStruct, Dataset, Cfg);
 end
 
-%% ── Guardar resultados ──────────────────────────────────────────────────
-if Cfg.SAVE_RESULTS
+%% ── Guardar resultados (sólo si se pide) ────────────────────────────────
+if isfield(Cfg, 'SAVE_RESULTS') && Cfg.SAVE_RESULTS
     out_dir   = fullfile(proj_root, 'output', 'results');
     timestamp = datestr(now, 'yyyymmdd_HHMMSS');
     out_file  = fullfile(out_dir, [spec_name, '_', timestamp, '.mat']);
