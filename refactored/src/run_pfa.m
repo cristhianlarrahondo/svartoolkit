@@ -36,6 +36,9 @@ iter_show = Cfg.ITER_SHOW;
 S         = Cfg.S;          % restricciones de signo
 Z         = Cfg.Z;          % restricciones de cero
 
+%% ── Cronómetro ───────────────────────────────────────────────────────────
+t_start = tic;
+
 %% ── Globals para penalty.m y mycon.m (igual que el original) ────────────
 global ssigma objective;
 ssigma = PosteriorParams.ssigma;
@@ -131,6 +134,11 @@ Results.FEVD         = FEVD;
 Results.Bdraws       = Bdraws;
 Results.Sigmadraws   = Sigmadraws;
 Results.Qdraws       = Qdraws;
+Results.t_elapsed    = toc(t_start);
+
+%% ── Resumen de diagnóstico al terminar ───────────────────────────────────
+print_run_summary(Cfg, Results, Results.t_elapsed);
 
 end
+
 
