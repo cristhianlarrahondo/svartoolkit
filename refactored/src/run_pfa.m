@@ -68,7 +68,7 @@ while record <= nd
 
     %% ── Draw Sigma e B|Sigma (exactamente como el original) ─────────────
     Sigmadraw     = iwishrnd(PphiTilde, nnuTilde);
-    cholSigmadraw = hh(Sigmadraw)';  % upper = chol(S), igual que el original
+    cholSigmadraw = hh(Sigmadraw);    % lower = chol(S)' — igual que hh(S)' del original
     Bdraw         = kron(cholSigmadraw, cholOomegaTilde) * randn(m*n, 1) ...
                     + reshape(PpsiTilde, n*m, 1);
     Bdraw         = reshape(Bdraw, n*p + Cfg.NEX, n);
@@ -79,9 +79,9 @@ while record <= nd
 
     %% ── PFA de Mountford y Uhlig (2009) ─────────────────────────────────
     % objective: vector fila para la restriccion de signo (stock prices > 0)
-    objective = e(2,:) * hh(Sigmadraw);   % lower = chol(S)', igual que el original
+    objective = e(2,:) * hh(Sigmadraw);    % lower = chol(S)' — igual que hh(S)' del original
     % Aeq, beq: restriccion lineal de cero (TFP = 0 en h=0)
-    Aeq = e(1,:) * hh(Sigmadraw);   % lower triangular — e1*L fuerza q(1)=0
+    Aeq = e(1,:) * hh(Sigmadraw);    % lower — e1*L fuerza q(1)=0
     beq = 0;
     % Punto inicial aleatorio
     q1ga = rand(n, 1);
@@ -93,7 +93,7 @@ while record <= nd
     Qdraws{record, 1} = q;
 
     %% ── Matriz F para IRFs (igual que el original) ───────────────────────
-    hSigmadraw = hh(Sigmadraw);
+    hSigmadraw = hh(Sigmadraw)';    % upper = chol(S) — igual que hh(S) del original
     A0         = hSigmadraw \ e;
     Aplus      = Bdraw * A0;
     for l = 1:p-1
@@ -109,7 +109,7 @@ while record <= nd
     end
 
     %% ── FEVD (igual que el original) ─────────────────────────────────────
-    FEVD(:, record) = variancedecomposition(F', J, Sigmadraw, hSigmadraw'*q, n, index);
+    FEVD(:, record) = variancedecomposition(F', J, Sigmadraw, hSigmadraw'*q, n, index);  % hSigmadraw'=lower=L ✓
 
     %% ── Progress display ─────────────────────────────────────────────────
     if counter == iter_show
