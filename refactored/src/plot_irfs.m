@@ -170,6 +170,11 @@ if ~isfolder(fig_dir)
     mkdir(fig_dir);
 end
 mode_str = LtildeStruct.mode;
+% Sufijo opcional para el nombre de archivo (ej. '_test' evita pisar produccion)
+fig_suffix = '';
+if isfield(Cfg, 'FIG_SUFFIX') && ~isempty(Cfg.FIG_SUFFIX)
+    fig_suffix = Cfg.FIG_SUFFIX;
+end
 
 %% ── Figura IRF ───────────────────────────────────────────────────────────
 if ismember(irf_type, {'irf', 'both'})
@@ -183,7 +188,7 @@ if ismember(irf_type, {'irf', 'both'})
         plot_panel(irf_med, irf_blo, irf_bhi, kk, label_resp{kk});
     end
     set(gcf, 'PaperPositionMode', 'auto');
-    fname1 = fullfile(fig_dir, ['irfs_', mode_str, '.png']);
+    fname1 = fullfile(fig_dir, ['irfs_', mode_str, fig_suffix, '.png']);
     print(fname1, '-dpng');
     fprintf('Figura IRF guardada en: %s\n', fname1);
 end
@@ -200,7 +205,7 @@ if ismember(irf_type, {'cirf', 'both'})
         plot_panel(cirf_med, cirf_blo, cirf_bhi, kk, [label_resp{kk}, ' (cum.)']);
     end
     set(gcf, 'PaperPositionMode', 'auto');
-    fname2 = fullfile(fig_dir, ['cirfs_', mode_str, '.png']);
+    fname2 = fullfile(fig_dir, ['cirfs_', mode_str, fig_suffix, '.png']);
     print(fname2, '-dpng');
     fprintf('Figura CIRF guardada en: %s\n', fname2);
 end
@@ -214,3 +219,4 @@ if ~strcmp(irf_norm, 'none')
 end
 
 end
+
