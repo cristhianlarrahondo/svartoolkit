@@ -314,20 +314,29 @@ try
     irfs_raw = LS_pfa.data;   % [H+1, 5, nd]
     [irfs_n, sf] = normalize_irfs(irfs_raw, 'own_unit', struct(), struct());
 
-    % Verificar: irfs_n(1, k, d) debe ser 1 para todo k, d
-    % (excepto donde irfs_raw(1,k,d)==0, caso que no debería ocurrir aquí)
+    % pivot(k,d) = irfs_raw(1,k,d)
+    pivot = squeeze(irfs_raw(1, :, :));    % [5, nd]
     h0_vals = squeeze(irfs_n(1, :, :));   % [5, nd]
-    % Algunos pueden ser NaN o Inf si pivot=0; ignorar esos
-    valid_mask = isfinite(h0_vals);
-    max_dev_from_1 = max(abs(h0_vals(valid_mask) - 1));
 
-    % Verificar scale_factors: sf(k,d) = 1/irfs_raw(1,k,d)
-    sf_expected = 1 ./ squeeze(irfs_raw(1, :, :));   % [5, nd]
-    sf_valid    = isfinite(sf_expected);
-    sf_err      = max(abs(sf(sf_valid) - sf_expected(sf_valid)));
+    % Donde pivot != 0: irfs_n(1,k,d) debe ser exactamente 1
+    nonzero_mask = (pivot ~= 0);
+    max_dev_from_1 = max(abs(h0_vals(nonzero_mask) - 1));
 
-    pass_B12 = (max_dev_from_1 < 1e-12) && (sf_err < 1e-12);
-    fprintf('  max|h=0 - 1| = %.2e  |  sf_err = %.2e\n', max_dev_from_1, sf_err);
+    % Donde pivot == 0: normalize_irfs no aplica escala → sf(k,d) debe ser 1
+    zero_mask = ~nonzero_mask;
+    n_zero = sum(zero_mask(:));
+    sf_zero_err = 0;
+    if n_zero > 0
+        sf_zero_err = max(abs(sf(zero_mask) - 1));
+    end
+
+    % Donde pivot != 0: sf(k,d) debe ser 1/pivot(k,d)
+    sf_expected_nz = 1 ./ pivot(nonzero_mask);
+    sf_err = max(abs(sf(nonzero_mask) - sf_expected_nz));
+
+    pass_B12 = (max_dev_from_1 < 1e-12) && (sf_err < 1e-12) && (sf_zero_err < 1e-12);
+    fprintf('  Draws con pivot=0: %d (escala no aplicada, sf=1 esperado)\n', n_zero);
+    fprintf('  max|h=0 - 1| (pivot!=0) = %.2e  |  sf_err = %.2e\n', max_dev_from_1, sf_err);
 catch ME
     pass_B12 = false;
     fprintf('  Error: %s\n', ME.message);
