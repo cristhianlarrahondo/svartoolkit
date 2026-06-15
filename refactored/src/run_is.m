@@ -65,13 +65,17 @@ for i = 1:n
     end
 end
 
-%% ── Funcion de Cholesky (igual que el original: hh = chol(x)') ──────────
-hh = @(x) chol(x)';
-
 %% ── Setup info para helpfunctions IS ────────────────────────────────────
 % SetupInfo construye la estructura que necesitan DrawW, ff_h, ff_h_inv,
 % SpheresToQ, ZeroRestrictions, LogVolumeElement, etc.
 info = SetupInfo(n, m, Z, @(x) chol(x));
+
+%% ── Funcion de Cholesky: usar info.h del SetupInfo (igual que el original) ─
+% El original: hh = info.h = @(x)chol(x)  (devuelve upper triangular)
+% cholSigmadraw = hh(Sigma)' = chol(Sigma)' (lower triangular)
+% CRITICO: NO redefinir hh como @(x)chol(x)' - eso invierte upper/lower
+% y produce Bdraws diferentes aunque los pesos sean iguales.
+hh = info.h;
 
 info.nlag     = p;
 info.horizons = horizons;
