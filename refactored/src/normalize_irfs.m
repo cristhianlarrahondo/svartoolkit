@@ -165,23 +165,41 @@ switch lower(type)
 
     %% ── 'own_unit' ── respuesta diagonal en h=0 normalizada a 1 ──────────
     case 'own_unit'
-        % Normaliza cada variable de respuesta k por su propio impacto en h=0.
-        % Es decir: irfs_norm(h, k, d) = irfs(h, k, d) / irfs(1, k, d)
-        % El "1" en irfs(1,...) es h=0 (primer índice temporal = horizonte 0).
+        % Normaliza cada variable de respuesta k por su propio impacto en h=0:
+        %   irfs_norm(h, k, d) = irfs(h, k, d) / irfs(1, k, d)
+        % Donde pivot = 0 (variable con restriccion de cero exacto en h=0),
+        % la escala no se aplica (scale_factor = 1, IRF sin cambio).
+        % En lugar de emitir un warning por draw, se imprime un resumen unico.
 
+        % pivot_mat: [nresp x ndraws] — impacto en h=0 de cada (var, draw)
+        pivot_mat = reshape(irfs(1, :, :), nresp, ndraws);
+
+        zero_mask = (pivot_mat == 0);   % [nresp x ndraws]
+        n_zero    = sum(zero_mask(:));
+
+        % Factores de escala: 1/pivot donde pivot!=0, 1 donde pivot==0
+        safe_pivot    = pivot_mat;
+        safe_pivot(zero_mask) = 1;          % evitar division por cero
+        scale_factors = 1 ./ safe_pivot;   % [nresp x ndraws]
+
+        % Aplicar draw-by-draw (solo donde pivot != 0)
         for d = 1:ndraws
             for k = 1:nresp
-                pivot = irfs(1, k, d);   % h=0, var k, draw d
-                if pivot == 0
-                    warning('normalize_irfs:zeroPivot', ...
-                        'IRF(h=0, var=%d) = 0 en draw %d. Escala no aplicada.', k, d);
-                    scale_factors(k, d) = 1;
-                else
-                    scale_factors(k, d)  = 1 / pivot;
-                    irfs_norm(:, k, d)   = irfs(:, k, d) / pivot;
+                if ~zero_mask(k, d)
+                    irfs_norm(:, k, d) = irfs(:, k, d) * scale_factors(k, d);
                 end
+                % pivot==0: irfs_norm ya contiene irfs(:,k,d) sin cambio
             end
         end
+
+        % Resumen unico si hubo pivots cero
+        if n_zero > 0
+            zero_vars = find(any(zero_mask, 2));
+            fprintf(['[normalize_irfs] own_unit: %d casos (var,draw) con pivot=0 ' ...
+                     '(vars: %s) — escala no aplicada.\n'], ...
+                n_zero, num2str(zero_vars(:)'));
+        end
+
 
     otherwise
         error('normalize_irfs:unknownType', ...
@@ -190,3 +208,4 @@ switch lower(type)
 end
 
 end
+
