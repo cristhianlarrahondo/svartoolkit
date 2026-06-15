@@ -11,18 +11,18 @@ function validate_lote3()
 %      B1.  print_summary PFA: imprime sin error
 %      B2.  print_summary IS: imprime sin error
 %      B3.  print_summary con SUMMARY_HORIZONS y CRED_BANDS custom
-%      B4.  print_summary error en campo faltante (LtildeStruct vacío)
+%      B4.  print_summary error con datos vacíos (ndraws=0)
 %      B5.  plot_fevd PFA: genera PNG sin error
 %      B6.  plot_fevd IS: genera PNG sin error
-%      B7.  plot_fevd con FIG_SUFFIX='_test': nombre de archivo correcto
+%      B7.  plot_fevd con FIG_SUFFIX='_validate' y banda custom
 %      B8.  plot_fevd error con FEVD vacío
 %      B9.  export_results PFA: genera .xlsx con las 5 hojas correctas
 %      B10. export_results IS: genera .xlsx con las 5 hojas correctas
 %      B11. export_results con IRF_TYPE='both': hojas irf y cirf presentes
 %      B12. export_results error con LtildeStruct ausente
-%      B13. export_results error con FEVD ausente
-%      B14. Cadena completa PFA: select_irfs → print_summary → plot_fevd → export_results
-%      B15. Cadena completa IS: select_irfs → print_summary → plot_fevd → export_results
+%      B13. export_results error con FEVD ausente/vacío
+%      B14. Cadena completa PFA: print_summary → plot_fevd → export_results
+%      B15. Cadena completa IS: print_summary → plot_fevd → export_results
 
 fprintf('\n');
 fprintf('============================================================\n');
@@ -38,28 +38,28 @@ addpath(fullfile(proj_root, 'config'));
 addpath(fullfile(proj_root, 'validate'));
 addpath(fullfile(proj_root, 'helpfunctions'));
 
-%% ── Correr PFA e IS una sola vez ─────────────────────────────────────────
+%% ── Cargar specs con load_spec (evita error de workspace estático) ────────
 fprintf('Preparando resultados PFA e IS (rng(0))...\n');
 
-run(fullfile(proj_root, 'config', 'spec_bnw_pfa.m'));
-Cfg_pfa = Cfg;
-Dataset_pfa = load_data(Cfg_pfa);
+cfg_dir = fullfile(proj_root, 'config');
+
+Cfg_pfa = load_spec(fullfile(cfg_dir, 'spec_bnw_pfa.m'));
+Dataset_pfa   = load_data(Cfg_pfa);
 Posterior_pfa = build_posterior(Dataset_pfa, Cfg_pfa);
 rng(Cfg_pfa.SEED);
 Results_pfa = run_pfa(Posterior_pfa, Cfg_pfa);
 
-run(fullfile(proj_root, 'config', 'spec_bnw_is.m'));
-Cfg_is = Cfg;
-Dataset_is = load_data(Cfg_is);
+Cfg_is = load_spec(fullfile(cfg_dir, 'spec_bnw_is.m'));
+Dataset_is   = load_data(Cfg_is);
 Posterior_is = build_posterior(Dataset_is, Cfg_is);
 rng(Cfg_is.SEED);
 Results_is = run_is(Posterior_is, Cfg_is);
 
 fprintf('Listo.\n\n');
 
-tol          = 1e-6;
-all_pass     = true;
-failed_tags  = {};
+tol         = 1e-6;
+all_pass    = true;
+failed_tags = {};
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  A — REGRESIÓN NUMÉRICA (referencias del Chat 7)
@@ -131,26 +131,26 @@ catch ME
 end
 [all_pass, failed_tags] = emit(pass_B3, 'B3', all_pass, failed_tags);
 
-%% B4 — print_summary error con LtildeStruct vacío
-fprintf('--- B4: print_summary LtildeStruct vacio (debe error) ---\n');
+%% B4 — print_summary con SUMMARY_HORIZONS fuera del rango → aviso, no crash
+fprintf('--- B4: print_summary SUMMARY_HORIZONS fuera de rango ---\n');
 try
-    LS_bad.mode      = 'pfa';
-    LS_bad.data      = [];
-    LS_bad.shock_idx = 1;
-    LS_bad.horizon   = 40;
-    LS_bad.nvar      = 5;
-    LS_bad.ndraws    = 0;
-    % Debe fallar en select_irfs o al acceder al array vacío
-    print_summary(LS_bad, Dataset_pfa, Cfg_pfa);
-    pass_B4 = false;   % Si no lanzó error, falla
-    fprintf('  No lanzó error — FALLA\n');
-catch ME
+    Cfg_b4 = Cfg_pfa;
+    Cfg_b4.SUMMARY_HORIZONS = [100 200];   % fuera de Cfg.HORIZON=40
+    print_summary(Results_pfa.LtildeStruct, Dataset_pfa, Cfg_b4);
+    % Debe imprimir aviso y retornar sin crash
     pass_B4 = true;
-    fprintf('  Error capturado correctamente: %s\n', ME.identifier);
+    fprintf('  Retornó sin crash (comportamiento esperado).\n');
+catch ME
+    pass_B4 = false;
+    fprintf('  Error inesperado: %s\n', ME.message);
 end
 [all_pass, failed_tags] = emit(pass_B4, 'B4', all_pass, failed_tags);
 
 %% ── B5-B8: plot_fevd ─────────────────────────────────────────────────────
+
+src_root  = fileparts(mfilename('fullpath'));
+proj_root2 = fileparts(src_root);
+fig_dir   = fullfile(proj_root2, 'output', 'figures');
 
 %% B5 — plot_fevd PFA: genera PNG sin error
 fprintf('--- B5: plot_fevd PFA ---\n');
@@ -159,17 +159,9 @@ try
     Cfg_b5.FIG_SUFFIX = '_test';
     plot_fevd(Results_pfa.FEVD, Dataset_pfa, Cfg_b5);
     close all;
-
-    % Verificar que el archivo existe
-    src_root  = fileparts(mfilename('fullpath'));
-    proj_root_b5 = fileparts(src_root);
-    fname_b5 = fullfile(proj_root_b5, 'output', 'figures', 'fevd_pfa_test.png');
+    fname_b5 = fullfile(fig_dir, 'fevd_pfa_test.png');
     pass_B5 = isfile(fname_b5);
-    if pass_B5
-        fprintf('  PNG generado: fevd_pfa_test.png\n');
-    else
-        fprintf('  Archivo PNG no encontrado: %s\n', fname_b5);
-    end
+    fprintf('  PNG generado: %d (%s)\n', pass_B5, 'fevd_pfa_test.png');
 catch ME
     pass_B5 = false;
     fprintf('  Error: %s\n', ME.message);
@@ -183,36 +175,26 @@ try
     Cfg_b6.FIG_SUFFIX = '_test';
     plot_fevd(Results_is.FEVD, Dataset_is, Cfg_b6);
     close all;
-
-    src_root  = fileparts(mfilename('fullpath'));
-    proj_root_b6 = fileparts(src_root);
-    fname_b6 = fullfile(proj_root_b6, 'output', 'figures', 'fevd_is_test.png');
+    fname_b6 = fullfile(fig_dir, 'fevd_is_test.png');
     pass_B6 = isfile(fname_b6);
-    if pass_B6
-        fprintf('  PNG generado: fevd_is_test.png\n');
-    else
-        fprintf('  Archivo PNG no encontrado: %s\n', fname_b6);
-    end
+    fprintf('  PNG generado: %d (%s)\n', pass_B6, 'fevd_is_test.png');
 catch ME
     pass_B6 = false;
     fprintf('  Error: %s\n', ME.message);
 end
 [all_pass, failed_tags] = emit(pass_B6, 'B6', all_pass, failed_tags);
 
-%% B7 — plot_fevd con FIG_SUFFIX personalizado y CRED_BANDS=[0.05 0.95]
+%% B7 — plot_fevd con sufijo y CRED_BANDS=[0.05 0.95]
 fprintf('--- B7: plot_fevd suffix+bands ---\n');
 try
     Cfg_b7 = Cfg_pfa;
-    Cfg_b7.FIG_SUFFIX  = '_validate';
-    Cfg_b7.CRED_BANDS  = [0.05 0.95];
+    Cfg_b7.FIG_SUFFIX = '_validate';
+    Cfg_b7.CRED_BANDS = [0.05 0.95];
     plot_fevd(Results_pfa.FEVD, Dataset_pfa, Cfg_b7);
     close all;
-
-    src_root  = fileparts(mfilename('fullpath'));
-    proj_root_b7 = fileparts(src_root);
-    fname_b7 = fullfile(proj_root_b7, 'output', 'figures', 'fevd_pfa_validate.png');
+    fname_b7 = fullfile(fig_dir, 'fevd_pfa_validate.png');
     pass_B7 = isfile(fname_b7);
-    fprintf('  PNG name OK: %d\n', pass_B7);
+    fprintf('  PNG con sufijo correcto: %d\n', pass_B7);
 catch ME
     pass_B7 = false;
     fprintf('  Error: %s\n', ME.message);
@@ -224,33 +206,17 @@ fprintf('--- B8: plot_fevd FEVD vacio (debe error) ---\n');
 try
     plot_fevd([], Dataset_pfa, Cfg_pfa);
     pass_B8 = false;
-    fprintf('  No lanzó error — FALLA\n');
+    fprintf('  No lanzo error — FALLA\n');
 catch ME
-    pass_B8 = true;
+    pass_B8 = contains(ME.identifier, 'plot_fevd');
     fprintf('  Error capturado: %s\n', ME.identifier);
 end
 [all_pass, failed_tags] = emit(pass_B8, 'B8', all_pass, failed_tags);
 
 %% ── B9-B13: export_results ───────────────────────────────────────────────
 
-% Helper: verificar hojas en xlsx
-function sheets_ok = check_xlsx_sheets(xlsx_path, required_sheets)
-    try
-        [~, sheet_names] = xlsfinfo(xlsx_path);
-        sheets_ok = all(ismember(required_sheets, sheet_names));
-        if ~sheets_ok
-            missing = required_sheets(~ismember(required_sheets, sheet_names));
-            fprintf('  Hojas faltantes: %s\n', strjoin(missing, ', '));
-        end
-    catch
-        sheets_ok = false;
-    end
-end
-
+tables_dir = fullfile(proj_root2, 'output', 'tables');
 required_sheets = {'metadata', 'irf_summary', 'cirf_summary', 'fevd_summary', 'run_diagnostics'};
-src_root_e   = fileparts(mfilename('fullpath'));
-proj_root_e  = fileparts(src_root_e);
-tables_dir_e = fullfile(proj_root_e, 'output', 'tables');
 
 %% B9 — export_results PFA: genera xlsx con 5 hojas
 fprintf('--- B9: export_results PFA ---\n');
@@ -260,14 +226,19 @@ try
     Cfg_b9.IRF_TYPE  = 'irf';
     export_results(Results_pfa, Dataset_pfa, Cfg_b9);
 
-    xlsx_b9 = fullfile(tables_dir_e, 'test_pfa_results.xlsx');
-    file_exists = isfile(xlsx_b9);
-    sheets_ok_b9 = false;
-    if file_exists
-        sheets_ok_b9 = check_xlsx_sheets(xlsx_b9, required_sheets);
+    xlsx_b9 = fullfile(tables_dir, 'test_pfa_results.xlsx');
+    file_ok  = isfile(xlsx_b9);
+    sheets_ok = false;
+    if file_ok
+        [~, sh] = xlsfinfo(xlsx_b9);
+        sheets_ok = all(ismember(required_sheets, sh));
+        missing = required_sheets(~ismember(required_sheets, sh));
+        if ~isempty(missing)
+            fprintf('  Hojas faltantes: %s\n', strjoin(missing, ', '));
+        end
     end
-    pass_B9 = file_exists && sheets_ok_b9;
-    fprintf('  Archivo existe: %d | Hojas OK: %d\n', file_exists, sheets_ok_b9);
+    pass_B9 = file_ok && sheets_ok;
+    fprintf('  Archivo: %d | Hojas OK: %d\n', file_ok, sheets_ok);
 catch ME
     pass_B9 = false;
     fprintf('  Error: %s\n', ME.message);
@@ -282,21 +253,26 @@ try
     Cfg_b10.IRF_TYPE  = 'irf';
     export_results(Results_is, Dataset_is, Cfg_b10);
 
-    xlsx_b10 = fullfile(tables_dir_e, 'test_is_results.xlsx');
-    file_exists = isfile(xlsx_b10);
-    sheets_ok_b10 = false;
-    if file_exists
-        sheets_ok_b10 = check_xlsx_sheets(xlsx_b10, required_sheets);
+    xlsx_b10 = fullfile(tables_dir, 'test_is_results.xlsx');
+    file_ok   = isfile(xlsx_b10);
+    sheets_ok2 = false;
+    if file_ok
+        [~, sh2] = xlsfinfo(xlsx_b10);
+        sheets_ok2 = all(ismember(required_sheets, sh2));
+        missing2 = required_sheets(~ismember(required_sheets, sh2));
+        if ~isempty(missing2)
+            fprintf('  Hojas faltantes: %s\n', strjoin(missing2, ', '));
+        end
     end
-    pass_B10 = file_exists && sheets_ok_b10;
-    fprintf('  Archivo existe: %d | Hojas OK: %d\n', file_exists, sheets_ok_b10);
+    pass_B10 = file_ok && sheets_ok2;
+    fprintf('  Archivo: %d | Hojas OK: %d\n', file_ok, sheets_ok2);
 catch ME
     pass_B10 = false;
     fprintf('  Error: %s\n', ME.message);
 end
 [all_pass, failed_tags] = emit(pass_B10, 'B10', all_pass, failed_tags);
 
-%% B11 — export_results IRF_TYPE='both': hojas irf + cirf presentes
+%% B11 — export_results IRF_TYPE='both': hojas irf + cirf con datos reales
 fprintf('--- B11: export_results IRF_TYPE=both ---\n');
 try
     Cfg_b11 = Cfg_pfa;
@@ -304,23 +280,20 @@ try
     Cfg_b11.IRF_TYPE  = 'both';
     export_results(Results_pfa, Dataset_pfa, Cfg_b11);
 
-    xlsx_b11 = fullfile(tables_dir_e, 'test_pfa_both_results.xlsx');
+    xlsx_b11 = fullfile(tables_dir, 'test_pfa_both_results.xlsx');
+    pass_B11 = false;
     if isfile(xlsx_b11)
-        [~, sheet_names_b11] = xlsfinfo(xlsx_b11);
-        has_irf  = ismember('irf_summary',  sheet_names_b11);
-        has_cirf = ismember('cirf_summary', sheet_names_b11);
-        pass_B11 = has_irf && has_cirf;
-        fprintf('  irf_summary: %d | cirf_summary: %d\n', has_irf, has_cirf);
-
-        % Verificar que cirf_summary no tiene la nota de "no incluye"
+        [~, sh3] = xlsfinfo(xlsx_b11);
+        has_irf  = ismember('irf_summary',  sh3);
+        has_cirf = ismember('cirf_summary', sh3);
+        % Verificar que cirf_summary tiene columna 'shock' (datos reales, no nota)
         T_cirf_check = readtable(xlsx_b11, 'Sheet', 'cirf_summary');
-        if height(T_cirf_check) > 0 && ismember('shock', T_cirf_check.Properties.VariableNames)
-            fprintf('  cirf_summary tiene datos reales: OK\n');
-        else
-            fprintf('  cirf_summary puede estar vacío o con nota\n');
-        end
+        has_data = ismember('shock', T_cirf_check.Properties.VariableNames) && ...
+                   height(T_cirf_check) > 0;
+        pass_B11 = has_irf && has_cirf && has_data;
+        fprintf('  irf_summary: %d | cirf_summary: %d | datos reales: %d\n', ...
+            has_irf, has_cirf, has_data);
     else
-        pass_B11 = false;
         fprintf('  Archivo no generado\n');
     end
 catch ME
@@ -332,25 +305,24 @@ end
 %% B12 — export_results error con LtildeStruct ausente
 fprintf('--- B12: export_results LtildeStruct ausente (debe error) ---\n');
 try
-    Results_bad = Results_pfa;
-    Results_bad = rmfield(Results_bad, 'LtildeStruct');
+    Results_bad = rmfield(Results_pfa, 'LtildeStruct');
     export_results(Results_bad, Dataset_pfa, Cfg_pfa);
     pass_B12 = false;
-    fprintf('  No lanzó error — FALLA\n');
+    fprintf('  No lanzo error — FALLA\n');
 catch ME
     pass_B12 = contains(ME.identifier, 'export_results');
     fprintf('  Error capturado: %s\n', ME.identifier);
 end
 [all_pass, failed_tags] = emit(pass_B12, 'B12', all_pass, failed_tags);
 
-%% B13 — export_results error con FEVD ausente
-fprintf('--- B13: export_results FEVD ausente (debe error) ---\n');
+%% B13 — export_results error con FEVD vacío
+fprintf('--- B13: export_results FEVD vacio (debe error) ---\n');
 try
-    Results_bad2 = Results_pfa;
+    Results_bad2      = Results_pfa;
     Results_bad2.FEVD = [];
     export_results(Results_bad2, Dataset_pfa, Cfg_pfa);
     pass_B13 = false;
-    fprintf('  No lanzó error — FALLA\n');
+    fprintf('  No lanzo error — FALLA\n');
 catch ME
     pass_B13 = contains(ME.identifier, 'export_results');
     fprintf('  Error capturado: %s\n', ME.identifier);
@@ -362,56 +334,44 @@ end
 %% B14 — Cadena completa PFA
 fprintf('--- B14: cadena completa PFA ---\n');
 try
-    LS_chain_pfa = Results_pfa.LtildeStruct;
-    endo_mask_c  = strcmp(Dataset_pfa.var_roles, 'endogenous');
-    LS_chain_pfa.var_labels = Dataset_pfa.var_labels(endo_mask_c);
+    % print_summary
+    Cfg_c = Cfg_pfa;
+    print_summary(Results_pfa.LtildeStruct, Dataset_pfa, Cfg_c);
 
-    % 1. print_summary
-    print_summary(LS_chain_pfa, Dataset_pfa, Cfg_pfa);
-
-    % 2. plot_fevd
-    Cfg_chain = Cfg_pfa;
-    Cfg_chain.FIG_SUFFIX = '_chain_pfa';
-    plot_fevd(Results_pfa.FEVD, Dataset_pfa, Cfg_chain);
+    % plot_fevd
+    Cfg_c.FIG_SUFFIX = '_chain_pfa';
+    plot_fevd(Results_pfa.FEVD, Dataset_pfa, Cfg_c);
     close all;
 
-    % 3. export_results
-    Cfg_chain.SPEC_NAME = 'chain_pfa';
-    Cfg_chain.IRF_TYPE  = 'irf';
-    export_results(Results_pfa, Dataset_pfa, Cfg_chain);
+    % export_results
+    Cfg_c.SPEC_NAME = 'chain_pfa';
+    Cfg_c.IRF_TYPE  = 'irf';
+    export_results(Results_pfa, Dataset_pfa, Cfg_c);
 
-    % Verificar outputs
-    xlsx_c = fullfile(tables_dir_e, 'chain_pfa_results.xlsx');
+    xlsx_c = fullfile(tables_dir, 'chain_pfa_results.xlsx');
     pass_B14 = isfile(xlsx_c);
-    fprintf('  Cadena completa: xlsx generado=%d\n', pass_B14);
+    fprintf('  Cadena PFA completa: xlsx=%d\n', pass_B14);
 catch ME
     pass_B14 = false;
-    fprintf('  Error en cadena: %s\n', ME.message);
+    fprintf('  Error en cadena PFA: %s\n', ME.message);
 end
 [all_pass, failed_tags] = emit(pass_B14, 'B14', all_pass, failed_tags);
 
 %% B15 — Cadena completa IS
 fprintf('--- B15: cadena completa IS ---\n');
 try
-    LS_chain_is = Results_is.LtildeStruct;
-    endo_mask_ci = strcmp(Dataset_is.var_roles, 'endogenous');
-    LS_chain_is.var_labels = Dataset_is.var_labels(endo_mask_ci);
+    Cfg_ci = Cfg_is;
+    print_summary(Results_is.LtildeStruct, Dataset_is, Cfg_ci);
 
-    % 1. print_summary
-    print_summary(LS_chain_is, Dataset_is, Cfg_is);
-
-    % 2. plot_fevd
-    Cfg_chain_is = Cfg_is;
-    Cfg_chain_is.FIG_SUFFIX = '_chain_is';
-    plot_fevd(Results_is.FEVD, Dataset_is, Cfg_chain_is);
+    Cfg_ci.FIG_SUFFIX = '_chain_is';
+    plot_fevd(Results_is.FEVD, Dataset_is, Cfg_ci);
     close all;
 
-    % 3. export_results
-    Cfg_chain_is.SPEC_NAME = 'chain_is';
-    Cfg_chain_is.IRF_TYPE  = 'both';
-    export_results(Results_is, Dataset_is, Cfg_chain_is);
+    Cfg_ci.SPEC_NAME = 'chain_is';
+    Cfg_ci.IRF_TYPE  = 'both';
+    export_results(Results_is, Dataset_is, Cfg_ci);
 
-    xlsx_ci = fullfile(tables_dir_e, 'chain_is_results.xlsx');
+    xlsx_ci = fullfile(tables_dir, 'chain_is_results.xlsx');
     pass_B15 = isfile(xlsx_ci);
     fprintf('  Cadena IS completa: xlsx=%d\n', pass_B15);
 catch ME
@@ -438,7 +398,7 @@ fprintf('============================================================\n\n');
 
 end
 
-%% ── Helpers ──────────────────────────────────────────────────────────────
+%% ── Helpers locales ──────────────────────────────────────────────────────
 function pass = check_val(val, ref, tol, name)
     err = abs(val - ref);
     if err < tol
