@@ -45,6 +45,9 @@ S         = Cfg.S;
 Z         = Cfg.Z;
 horizons  = Cfg.HORIZONS_RESTRICT;   % horizonte(s) sobre los que se restringen
 
+%% ── Cronómetro ───────────────────────────────────────────────────────────
+t_start = tic;
+
 %% ── Normalizar Z: cada Z{i} debe ser zeros(zi, numel(horizons)*n) ────────
 % El original inicializa explicitamente:
 %   for i=1:nvar, Z{i}=zeros(0,numel(horizons)*nvar); end
@@ -248,5 +251,24 @@ Results.Bdraws       = Bdraws;
 Results.Sigmadraws   = Sigmadraws;
 Results.Qdraws       = Qdraws;
 Results.uw           = uw;
+Results.t_elapsed    = toc(t_start);
+
+%% ── Resumen de diagnóstico al terminar ───────────────────────────────────
+print_run_summary(Cfg, Results, Results.t_elapsed);
+
+%% ── E3: Alerta de tasa de aceptación baja ────────────────────────────────
+% Leer umbral desde Cfg.MIN_ACCEPT_RATE (default 0.30 si no existe)
+if isfield(Cfg, 'MIN_ACCEPT_RATE')
+    min_accept = Cfg.MIN_ACCEPT_RATE;
+else
+    min_accept = 0.30;
+end
+accept_rate_final = sum(Results.uw > 0) / Cfg.ND;
+if accept_rate_final < min_accept
+    fprintf('[ADVERTENCIA] Tasa de aceptación baja: %.4f (umbral: %.2f)\n', ...
+            accept_rate_final, min_accept);
+    fprintf('             Considera aumentar ND o relajar las restricciones.\n');
+end
 
 end
+
