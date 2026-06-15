@@ -51,6 +51,10 @@ else
     run(cfg_path);
 end
 
+%% ── Validar configuración ───────────────────────────────────────────────
+addpath(fullfile(proj_root, 'validate'));
+validate_cfg(Cfg);
+
 %% ── Cargar datos según modo ─────────────────────────────────────────────
 if strcmp(Cfg.MODE, 'timing')
     Dataset = load_data_timing(Cfg);
