@@ -402,14 +402,14 @@ all_pass = all_pass && pass_B14;
 % para que plot_irfs guarde las figuras de test en nombres separados,
 % sin pisar irfs_pfa.png de producción.
 
-% LtildeStruct reducida (primeros 50 draws) con modo de test
+% LtildeStruct reducida (primeros 50 draws)
 LS_small        = LS_pfa;
 LS_small.data   = LS_pfa.data(:, :, 1:50);
 LS_small.ndraws = 50;
-LS_small.mode   = 'validate';   % guarda como irfs_validate.png, cirfs_validate.png
 
-Cfg_plot = Cfg_pfa;
-Cfg_plot.PLOT_IRFS = false;
+Cfg_plot            = Cfg_pfa;
+Cfg_plot.PLOT_IRFS  = false;
+Cfg_plot.FIG_SUFFIX = '_test';   % guarda irfs_pfa_test.png — no pisa produccion
 
 %% B15 — IRF_TYPE='irf'
 fprintf('--- B15: plot_irfs IRF_TYPE=irf ---\n');
