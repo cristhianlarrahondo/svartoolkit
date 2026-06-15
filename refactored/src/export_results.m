@@ -7,7 +7,7 @@ function export_results(Results, Dataset, Cfg)
 %     1. metadata       — spec, fecha, variables, modo, semilla
 %     2. irf_summary    — shock × response × horizon | median | pX | pY
 %     3. cirf_summary   — ídem para CIRFs (solo si IRF_TYPE incluye 'cirf')
-%     4. fevd_summary   — variable × (sin horizonte fijo) | median | pX | pY
+%     4. fevd_summary   — variable | median | pX | pY
 %     5. run_diagnostics — ESS, tasa aceptación, tiempo, nd
 %
 %   Campos de Cfg usados:
@@ -41,12 +41,8 @@ end
 cred_bands = [0.16 0.84];
 if isfield(Cfg, 'CRED_BANDS') && ~isempty(Cfg.CRED_BANDS)
     cb = Cfg.CRED_BANDS;
-    if isvector(cb)
-        cb = reshape(cb, 1, []);
-    end
-    if size(cb, 2) == 2
-        cred_bands = cb;
-    end
+    if isvector(cb), cb = reshape(cb, 1, []); end
+    if size(cb, 2) == 2, cred_bands = cb; end
 end
 n_bands = size(cred_bands, 1);
 
@@ -61,9 +57,7 @@ if isfield(Cfg, 'SPEC_NAME') && ~isempty(Cfg.SPEC_NAME)
 end
 
 seed = 0;
-if isfield(Cfg, 'SEED')
-    seed = Cfg.SEED;
-end
+if isfield(Cfg, 'SEED'), seed = Cfg.SEED; end
 
 mode_str = 'unknown';
 if isfield(Cfg, 'MODE') && ~isempty(Cfg.MODE)
@@ -74,25 +68,18 @@ end
 src_root   = fileparts(mfilename('fullpath'));
 proj_root  = fileparts(src_root);
 tables_dir = fullfile(proj_root, 'output', 'tables');
-if ~isfolder(tables_dir)
-    mkdir(tables_dir);
-end
+if ~isfolder(tables_dir), mkdir(tables_dir); end
 
-% Nombre limpio para archivo
 safe_name = regexprep(spec_name, '[^a-zA-Z0-9_]', '_');
 xlsx_path = fullfile(tables_dir, [safe_name, '_results.xlsx']);
-
-% Eliminar archivo previo si existe (evitar hojas fantasma de versiones anteriores)
-if isfile(xlsx_path)
-    delete(xlsx_path);
-end
+if isfile(xlsx_path), delete(xlsx_path); end
 
 %% ── Variables endógenas ──────────────────────────────────────────────────
+LtildeStruct = Results.LtildeStruct;
+nvar         = LtildeStruct.nvar;
+
 endo_mask  = strcmp(Dataset.var_roles, 'endogenous');
 all_labels = Dataset.var_labels(endo_mask);
-nvar       = LtildeStruct_safe(Results).nvar;
-
-LtildeStruct = Results.LtildeStruct;
 LtildeStruct.var_labels = all_labels;
 
 shock_idx = LtildeStruct.shock_idx;
@@ -102,178 +89,174 @@ end
 
 response_idx = 1:nvar;
 if isfield(Cfg, 'RESP_IDX') && ~isempty(Cfg.RESP_IDX)
-    response_idx = Cfg.RESP_IDX;
-    response_idx = response_idx(response_idx >= 1 & response_idx <= nvar);
+    ri = Cfg.RESP_IDX;
+    response_idx = ri(ri >= 1 & ri <= nvar);
 end
 
 %% ── Extraer IRFs ─────────────────────────────────────────────────────────
 [irfs_raw, label_shock, label_resp] = select_irfs(LtildeStruct, shock_idx, response_idx);
 horizon_max = LtildeStruct.horizon;
 
-% Filtrar horizontes dentro de rango
 h_valid = summary_horizons(summary_horizons >= 0 & summary_horizons <= horizon_max);
 h_idx   = h_valid + 1;
 nh      = numel(h_idx);
 nresp   = numel(response_idx);
 
+%% ── Construir nombres de columnas de bandas ──────────────────────────────
+band_col_names = cell(1, n_bands * 2);
+for bb = 1:n_bands
+    band_col_names{(bb-1)*2 + 1} = sprintf('p%.0f', cred_bands(bb,1) * 100);
+    band_col_names{(bb-1)*2 + 2} = sprintf('p%.0f', cred_bands(bb,2) * 100);
+end
+
+irf_col_names  = [{'shock', 'response', 'horizon', 'median'}, band_col_names];
+fevd_col_names = [{'variable', 'median'}, band_col_names];
+
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 1: metadata
+%  Helper: calcular cuantiles de un slice de IRF
 %% ══════════════════════════════════════════════════════════════════════════
-meta_labels = {'Campo', 'Valor'};
-meta_vals   = {
-    'spec_name',    spec_name;
-    'fecha_run',    datestr(now, 'yyyy-mm-dd HH:MM:SS');
-    'modo',         mode_str;
-    'semilla',      num2str(seed);
-    'nd',           num2str(Cfg.ND);
-    'horizon',      num2str(LtildeStruct.horizon);
-    'nvar',         num2str(nvar);
-    'nlag',         num2str(Cfg.NLAG);
-    'shock_idx',    num2str(shock_idx);
-    'shock_label',  label_shock;
-    'variables',    strjoin(all_labels, ', ');
-    'irf_type',     irf_type;
-    'cred_bands',   mat2str(cred_bands);
-    'summary_horizons', mat2str(h_valid);
-};
-T_meta = cell2table([meta_vals(:,1), meta_vals(:,2)], 'VariableNames', meta_labels);
-writetable(T_meta, xlsx_path, 'Sheet', 'metadata', 'WriteVariableNames', true);
-
-%% ── Helper: calcular stats de IRF ───────────────────────────────────────
-function rows = build_irf_rows(irfs_arr, h_valid_in, h_idx_in, nh_in, nresp_in, ...
-                                label_shock_in, label_resp_in, cred_bands_in, n_bands_in)
-    rows = {};
-    for ii = 1:nh_in
-        for jj = 1:nresp_in
-            sl = irfs_arr(h_idx_in(ii), jj, :);
-            sl = sl(:);
-            med_v = quantile(sl, 0.50);
-
-            band_vals = cell(1, n_bands_in*2);
-            for bb = 1:n_bands_in
-                band_vals{(bb-1)*2+1} = quantile(sl, cred_bands_in(bb, 1));
-                band_vals{(bb-1)*2+2} = quantile(sl, cred_bands_in(bb, 2));
-            end
-
-            row = [label_shock_in, label_resp_in{jj}, h_valid_in(ii), med_v, band_vals{:}];
-            rows = [rows; row]; %#ok<AGROW>
-        end
+function q_vals = calc_quantiles(sl, cred_bands_in, n_bands_in)
+    sl = sl(:);
+    q_vals = zeros(1, n_bands_in * 2);
+    for bb = 1:n_bands_in
+        q_vals((bb-1)*2 + 1) = quantile(sl, cred_bands_in(bb, 1));
+        q_vals((bb-1)*2 + 2) = quantile(sl, cred_bands_in(bb, 2));
     end
 end
 
-%% ── Construir encabezados de bandas ──────────────────────────────────────
-band_col_names = {};
-for bb = 1:n_bands
-    band_col_names{end+1} = sprintf('p%.0f', cred_bands(bb,1)*100); %#ok<AGROW>
-    band_col_names{end+1} = sprintf('p%.0f', cred_bands(bb,2)*100); %#ok<AGROW>
-end
-irf_col_names = [{'shock', 'response', 'horizon', 'median'}, band_col_names];
+%% ══════════════════════════════════════════════════════════════════════════
+%  HOJA 1: metadata
+%% ══════════════════════════════════════════════════════════════════════════
+meta_data = {
+    'spec_name',          spec_name;
+    'fecha_run',          datestr(now, 'yyyy-mm-dd HH:MM:SS');
+    'modo',               mode_str;
+    'semilla',            num2str(seed);
+    'nd',                 num2str(Cfg.ND);
+    'horizon',            num2str(LtildeStruct.horizon);
+    'nvar',               num2str(nvar);
+    'nlag',               num2str(Cfg.NLAG);
+    'shock_idx',          num2str(shock_idx);
+    'shock_label',        label_shock;
+    'variables',          strjoin(all_labels, ', ');
+    'irf_type',           irf_type;
+    'cred_bands',         mat2str(cred_bands);
+    'summary_horizons',   mat2str(h_valid);
+};
+T_meta = cell2table(meta_data, 'VariableNames', {'campo', 'valor'});
+writetable(T_meta, xlsx_path, 'Sheet', 'metadata', 'WriteVariableNames', true);
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 2: irf_summary
 %% ══════════════════════════════════════════════════════════════════════════
-if ismember(irf_type, {'irf', 'both'})
-    rows_irf = build_irf_rows(irfs_raw, h_valid, h_idx, nh, nresp, ...
-                               label_shock, label_resp, cred_bands, n_bands);
-    if ~isempty(rows_irf)
-        T_irf = cell2table(rows_irf, 'VariableNames', irf_col_names);
-        writetable(T_irf, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
+function rows = build_irf_rows(irfs_arr, label_shock_in, label_resp_in, ...
+                                h_valid_in, h_idx_in, nh_in, nresp_in, ...
+                                cred_bands_in, n_bands_in)
+    % Devuelve cell array [nh*nresp x (4 + n_bands*2)]
+    % Cada fila: {shock_label, resp_label, horizon, median, q1, q2, ...}
+    n_cols = 4 + n_bands_in * 2;
+    rows   = cell(nh_in * nresp_in, n_cols);
+    row_k  = 1;
+    for ii = 1:nh_in
+        for jj = 1:nresp_in
+            sl    = irfs_arr(h_idx_in(ii), jj, :);
+            med_v = quantile(sl(:), 0.50);
+            q_vals = zeros(1, n_bands_in * 2);
+            for bb = 1:n_bands_in
+                q_vals((bb-1)*2 + 1) = quantile(sl(:), cred_bands_in(bb, 1));
+                q_vals((bb-1)*2 + 2) = quantile(sl(:), cred_bands_in(bb, 2));
+            end
+            rows{row_k, 1} = label_shock_in;
+            rows{row_k, 2} = label_resp_in{jj};
+            rows{row_k, 3} = h_valid_in(ii);
+            rows{row_k, 4} = med_v;
+            for kk = 1:n_bands_in * 2
+                rows{row_k, 4 + kk} = q_vals(kk);
+            end
+            row_k = row_k + 1;
+        end
     end
+end
+
+if ismember(irf_type, {'irf', 'both'})
+    rows_irf = build_irf_rows(irfs_raw, label_shock, label_resp, ...
+                               h_valid, h_idx, nh, nresp, cred_bands, n_bands);
+    T_irf = cell2table(rows_irf, 'VariableNames', irf_col_names);
+    writetable(T_irf, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
 else
-    % Escribir hoja vacía con nota
-    T_empty = cell2table({'(IRF_TYPE no incluye irf)'}, 'VariableNames', {'nota'});
-    writetable(T_empty, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
+    T_irf_empty = cell2table({'(IRF_TYPE no incluye irf)'}, 'VariableNames', {'nota'});
+    writetable(T_irf_empty, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
 end
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 3: cirf_summary
 %% ══════════════════════════════════════════════════════════════════════════
 if ismember(irf_type, {'cirf', 'both'})
-    cirfs_raw = compute_cirfs(irfs_raw);
-    rows_cirf = build_irf_rows(cirfs_raw, h_valid, h_idx, nh, nresp, ...
-                                label_shock, label_resp, cred_bands, n_bands);
-    if ~isempty(rows_cirf)
-        T_cirf = cell2table(rows_cirf, 'VariableNames', irf_col_names);
-        writetable(T_cirf, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
-    end
+    cirfs_raw  = compute_cirfs(irfs_raw);
+    rows_cirf  = build_irf_rows(cirfs_raw, label_shock, label_resp, ...
+                                 h_valid, h_idx, nh, nresp, cred_bands, n_bands);
+    T_cirf = cell2table(rows_cirf, 'VariableNames', irf_col_names);
+    writetable(T_cirf, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
 else
-    T_empty2 = cell2table({'(IRF_TYPE no incluye cirf)'}, 'VariableNames', {'nota'});
-    writetable(T_empty2, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
+    T_cirf_empty = cell2table({'(IRF_TYPE no incluye cirf)'}, 'VariableNames', {'nota'});
+    writetable(T_cirf_empty, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
 end
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 4: fevd_summary
 %% ══════════════════════════════════════════════════════════════════════════
-FEVD = Results.FEVD;   % [nvar x ndraws_fevd]
+FEVD     = Results.FEVD;
 FEVD_sel = FEVD(response_idx, :);   % [nresp x ndraws]
 
-fevd_col_names = [{'variable', 'median'}, band_col_names];
-rows_fevd = {};
+n_fevd_cols = 2 + n_bands * 2;
+rows_fevd   = cell(nresp, n_fevd_cols);
 for jj = 1:nresp
-    sl = FEVD_sel(jj, :)';
+    sl    = FEVD_sel(jj, :)';
     med_v = quantile(sl, 0.50);
-
-    band_vals_f = cell(1, n_bands*2);
+    rows_fevd{jj, 1} = label_resp{jj};
+    rows_fevd{jj, 2} = med_v;
     for bb = 1:n_bands
-        band_vals_f{(bb-1)*2+1} = quantile(sl, cred_bands(bb, 1));
-        band_vals_f{(bb-1)*2+2} = quantile(sl, cred_bands(bb, 2));
+        rows_fevd{jj, 2 + (bb-1)*2 + 1} = quantile(sl, cred_bands(bb, 1));
+        rows_fevd{jj, 2 + (bb-1)*2 + 2} = quantile(sl, cred_bands(bb, 2));
     end
-
-    row = [label_resp{jj}, med_v, band_vals_f{:}];
-    rows_fevd = [rows_fevd; row]; %#ok<AGROW>
 end
-
 T_fevd = cell2table(rows_fevd, 'VariableNames', fevd_col_names);
 writetable(T_fevd, xlsx_path, 'Sheet', 'fevd_summary', 'WriteVariableNames', true);
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 5: run_diagnostics
 %% ══════════════════════════════════════════════════════════════════════════
-diag_labels = {'metrica', 'valor'};
-diag_vals   = {};
-
 switch lower(mode_str)
     case 'pfa'
-        nd_eff = LtildeStruct.ndraws;
-        diag_vals = {
-            'modo',          'pfa';
-            'nd',            num2str(Cfg.ND);
-            'nd_efectivo',   num2str(nd_eff);
-            'ESS',           'N/A (PFA)';
-            'tasa_acept',    'N/A (PFA)';
-            'tiempo_s',      sprintf('%.2f', Results.t_elapsed);
+        diag_data = {
+            'modo',         mode_str;
+            'nd',           num2str(Cfg.ND);
+            'nd_efectivo',  num2str(LtildeStruct.ndraws);
+            'ESS',          'N/A (PFA)';
+            'tasa_acept',   'N/A (PFA)';
+            'tiempo_s',     sprintf('%.2f', Results.t_elapsed);
         };
-
     case 'is'
-        nd_eff = Results.ne;
         accept_rate = sum(Results.uw > 0) / Cfg.ND;
-        diag_vals = {
-            'modo',          'is';
-            'nd',            num2str(Cfg.ND);
-            'ESS_ne',        num2str(nd_eff);
-            'ESS_ratio',     sprintf('%.4f', nd_eff / Cfg.ND);
-            'tasa_acept',    sprintf('%.4f', accept_rate);
-            'tiempo_s',      sprintf('%.2f', Results.t_elapsed);
+        diag_data = {
+            'modo',         mode_str;
+            'nd',           num2str(Cfg.ND);
+            'ESS_ne',       num2str(Results.ne);
+            'ESS_ratio',    sprintf('%.4f', Results.ne / Cfg.ND);
+            'tasa_acept',   sprintf('%.4f', accept_rate);
+            'tiempo_s',     sprintf('%.2f', Results.t_elapsed);
         };
-
     otherwise
-        diag_vals = {
-            'modo',          mode_str;
-            'nd',            num2str(Cfg.ND);
-            'tiempo_s',      sprintf('%.2f', Results.t_elapsed);
+        diag_data = {
+            'modo',     mode_str;
+            'nd',       num2str(Cfg.ND);
+            'tiempo_s', sprintf('%.2f', Results.t_elapsed);
         };
 end
-
-T_diag = cell2table(diag_vals, 'VariableNames', diag_labels);
+T_diag = cell2table(diag_data, 'VariableNames', {'metrica', 'valor'});
 writetable(T_diag, xlsx_path, 'Sheet', 'run_diagnostics', 'WriteVariableNames', true);
 
 fprintf('export_results: archivo guardado en:\n  %s\n', xlsx_path);
 fprintf('  Hojas: metadata | irf_summary | cirf_summary | fevd_summary | run_diagnostics\n');
 
-end
-
-%% ── Helper privado ───────────────────────────────────────────────────────
-function ls = LtildeStruct_safe(Results)
-%Wrapper para extraer LtildeStruct de Results con validación mínima.
-    ls = Results.LtildeStruct;
 end
