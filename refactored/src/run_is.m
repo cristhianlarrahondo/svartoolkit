@@ -120,7 +120,7 @@ while record <= nd
     cholSigmadraw = hh(Sigmadraw)';
     Bdraw         = kron(cholSigmadraw, cholOomegaTilde) * randn(m*n, 1) ...
                     + reshape(PpsiTilde, n*m, 1);
-    Bdraw         = reshape(Bdraw, n*p + Cfg.NEX, n);
+    Bdraw         = reshape(Bdraw, PosteriorParams.m, n);  % usa m de PosteriorParams (incluye dummies)
 
     % Guardar draws de forma reducida
     Bdraws{record, 1}     = Bdraw;
@@ -271,4 +271,5 @@ if accept_rate_final < min_accept
 end
 
 end
+
 
