@@ -13,7 +13,7 @@ function PosteriorParams = build_posterior(Dataset, Cfg)
 %   Cfg.PRIOR.type admite:
 %     'diffuse'           — NIW impropio (paper original, default)
 %     'minnesota'         — Shrinkage hacia RW (lambda1, lambda2, lambda3)
-%     'sims_zha'          — NO SOPORTADO (ver nota en build_posterior)
+%     'sims_zha'          — Dummy observations (mu5, mu6); ver nota de transformaciones
 %     'niw_custom'        — NIW informativo con parametros explicitos
 %     'natural_conjugate' — Minnesota en forma NIW estricta (Kadiyala & Karlsson 1997)
 %
@@ -126,20 +126,82 @@ switch prior_type
         PphiBar = zeros(n);
         Y_aug = Y;  X_aug = X;  T_eff = T;
 
-    % ── Prior 2: Sims-Zha — NO SOPORTADO ─────────────────────────────────
-    % La formulacion de Sims & Zha (1998) con dummies de co-persistence
-    % (mu5) y co-integration (mu6) requiere datos demeaned o en diferencias
-    % (y0_bar ~ O(1)). Con datos en log-niveles (BNW: y0 ~ O(100-1000)),
-    % los dummies dominan la verosimilitud y producen IRFs incorrectas.
-    % Esta prior queda diferida para cuando se implemente Cfg.TRANSFORMS
-    % en load_data (Chat 13). Usar 'minnesota' o 'natural_conjugate' como
-    % alternativa de shrinkage.
+    % ── Prior 2: Sims-Zha ─────────────────────────────────────────────────
+    % Dummy observations: suma de coeficientes (mu5) + tendencia comun (mu6).
+    % Ref: Sims & Zha (1998), Kadiyala & Karlsson (1997) Sec. 3.2.
+    %
+    % REQUISITO DE TRANSFORMACION: esta prior asume datos en diferencias o
+    % demeaned (y0_bar ~ O(1)). Con datos en log-niveles los dummies pueden
+    % dominar la verosimilitud. Transformaciones recomendadas via Cfg.TRANSFORMS
+    % (disponible en Chat 13 — Lote 6: Loader extendido):
+    %   'dlog'  — log-diferencias: convierte niveles a tasas de crecimiento
+    %   'diff'  — primeras diferencias: elimina tendencia lineal
+    %   'demean'— resta la media muestral: centra la serie en cero
+    % Con cualquiera de estas transformaciones, y0_bar queda ~ O(sigma),
+    % y los dummies pesan apropiadamente respecto a los datos.
+    %
+    % Hiperparametros:
+    %   mu5 > 0: fuerza de la prior de co-persistence (suma coefs = I)
+    %   mu6 > 0: fuerza de la prior de co-integration (tendencia comun)
+    %   Valores pequenos (e.g. 1) => prior fuerte; grandes => prior debil.
     case 'sims_zha'
-        error('build_posterior:simsZhaNonSoportado', ...
-            ['Prior "sims_zha" no esta soportada en esta version. ' ...
-             'Requiere datos demeaned o en diferencias (y0 ~ O(1)). ' ...
-             'Con datos en log-niveles produce IRFs incorrectas. ' ...
-             'Alternativas disponibles: ''minnesota'' o ''natural_conjugate''.']);
+        pr = Cfg.PRIOR;
+        check_required_fields(pr, {'mu5','mu6'}, 'sims_zha');
+        mu5 = pr.mu5;
+        mu6 = pr.mu6;
+
+        % Advertencia si los datos parecen estar en niveles (y0 grande)
+        y0 = mean(num(1:p, :), 1);           % [1 x n] media pre-muestra
+        sigma_j = sqrt(sig2)';               % [1 x n] desv. estandar OLS
+        y0_normalized = abs(y0) ./ sigma_j; % [1 x n] ratio nivel/escala
+        if any(y0_normalized > 10)
+            warning('build_posterior:simsZhaScale', ...
+                ['Prior sims_zha: y0_bar/sigma > 10 para algunas variables. ' ...
+                 'Los datos parecen estar en niveles (no demeaned/diferencias). ' ...
+                 'Los dummies pueden dominar la verosimilitud. ' ...
+                 'Considere aplicar Cfg.TRANSFORMS = {''dlog''|''diff''|''demean''} ' ...
+                 'en load_data antes de usar esta prior.']);
+        end
+
+        % Construir dummies usando y0 normalizado por sigma para
+        % hacer los dummies comparables entre variables
+        y0_s = y0 ./ sigma_j;   % [1 x n], ~ O(1) independientemente de escala
+
+        % Dummy 1: co-persistence (mu5) — n filas
+        % Prior: suma de coeficientes propios de cada variable = 1
+        if mu5 > 0
+            Y_d1 = diag(y0_s) / mu5;
+            X_d1 = zeros(n, m);
+            for l = 1:p
+                X_d1(:, (l-1)*n+1:l*n) = diag(y0_s) / mu5;
+            end
+        else
+            Y_d1 = zeros(0, n);  X_d1 = zeros(0, m);
+        end
+
+        % Dummy 2: co-integration (mu6) — 1 fila
+        % Prior: las variables comparten una tendencia comun
+        if mu6 > 0
+            Y_d2 = y0_s / mu6;
+            X_d2 = zeros(1, m);
+            for l = 1:p
+                X_d2(1, (l-1)*n+1:l*n) = y0_s / mu6;
+            end
+            if nex >= 1
+                X_d2(1, m) = 1 / mu6;
+            end
+        else
+            Y_d2 = zeros(0, n);  X_d2 = zeros(0, m);
+        end
+
+        Y_aug = [Y; Y_d1; Y_d2];
+        X_aug = [X; X_d1; X_d2];
+        T_eff = size(Y_aug, 1);
+
+        nnuBar           = 0;
+        OomegaBarInverse = zeros(m);
+        PpsiBar          = zeros(m, n);
+        PphiBar          = zeros(n);
 
     % ── Prior 3: NIW Custom ───────────────────────────────────────────────
     % NIW informativo con parametros explicitamente especificados.
@@ -226,7 +288,7 @@ switch prior_type
     otherwise
         error('build_posterior:unknownPrior', ...
             ['Prior type "%s" no reconocido. ' ...
-             'Tipos soportados: diffuse, minnesota, niw_custom, natural_conjugate. (sims_zha no soportado con datos en niveles)'], ...
+             'Tipos validos: diffuse, minnesota, sims_zha, niw_custom, natural_conjugate.'], ...
             prior_type);
 end
 
@@ -272,5 +334,6 @@ function check_required_fields(pr, fields, prior_name)
         end
     end
 end
+
 
 
