@@ -1,22 +1,18 @@
 %MAIN_OIL  Punto de entrada del ejemplo: mercado petrolero (BH 2019).
 %
-%   MAIN_OIL corre el caso de uso completo de mercado petrolero:
-%     1. Estima el VAR(24) con spec_oil_pfa (solo sign restrictions)
-%     2. Estima el VAR(24) con spec_oil_is  (sign + zero restriction)
-%     3. Imprime resumen en consola con print_summary
-%     4. Exporta resultados a Excel con export_results
+%   MAIN_OIL demuestra el flujo completo de uso del SVAR Toolkit con un
+%   dataset distinto al de referencia (BNW):
+%     1. Estima VAR(24) con spec_oil_pfa (solo sign restrictions)
+%     2. Estima VAR(24) con spec_oil_is  (sign + zero restriction)
+%     3. Imprime resumen IRF en consola (print_summary)
+%     4. Exporta resultados PFA a Excel  (export_results)
 %
-%   Propósito pedagógico: documenta el flujo completo de uso del toolkit
-%   con un dataset distinto al de referencia (BNW). No duplica lógica
-%   de src/ — llama main() del toolkit directamente.
+%   No duplica lógica de src/. Llama directamente a las funciones del toolkit.
 %
-%   Uso desde MATLAB (desde cualquier directorio):
+%   Uso desde MATLAB (cualquier working directory):
 %     >> run('ruta/a/refactored/examples/oil_market/main_oil.m')
-%   O bien, con refactored/ en el path:
-%     >> main_oil
 %
 %   Convenciones de ruta: NUNCA se usa pwd, cd, ni '..'.
-%   Cada ruta se calcula con fileparts(mfilename('fullpath')).
 
 fprintf('\n');
 fprintf('================================================================\n');
@@ -24,96 +20,78 @@ fprintf('  SVAR Toolkit — Ejemplo: Mercado Petrolero (BH 2019)\n');
 fprintf('  Algoritmo: Arias, Rubio-Ramirez y Waggoner (2018)\n');
 fprintf('================================================================\n\n');
 
-%% ── Localizar directorios ────────────────────────────────────────────────
-ex_root   = fileparts(mfilename('fullpath'));   % .../examples/oil_market/
-ref_root  = fileparts(fileparts(ex_root));      % .../refactored/
+%% ── Rutas ────────────────────────────────────────────────────────────────
+ex_root  = fileparts(mfilename('fullpath'));    % .../examples/oil_market/
+ref_root = fileparts(fileparts(ex_root));       % .../refactored/
 
-% Añadir src, config, helpfunctions y validate del toolkit al path
 addpath(fullfile(ref_root, 'src'));
 addpath(fullfile(ref_root, 'config'));
 addpath(fullfile(ref_root, 'helpfunctions'));
 addpath(fullfile(ref_root, 'validate'));
+addpath(fullfile(ex_root,  'config'));
 
-% Añadir config del ejemplo al path
-addpath(fullfile(ex_root, 'config'));
-
-%% ── Verificar que data_bau.xlsx existe ───────────────────────────────────
+%% ── Verificar datos ──────────────────────────────────────────────────────
 data_path = fullfile(ex_root, 'data', 'data_bau.xlsx');
 if ~isfile(data_path)
     error('main_oil:dataMissing', ...
-        ['Archivo de datos no encontrado:\n  %s\n' ...
-         'Asegurate de que data_bau.xlsx esté en examples/oil_market/data/'], ...
+        'Archivo no encontrado:\n  %s\nColoca data_bau.xlsx en examples/oil_market/data/', ...
         data_path);
 end
-fprintf('[OK] Datos encontrados: %s\n\n', data_path);
+fprintf('[OK] Datos: %s\n\n', data_path);
 
-%% ── PASO 1: Estimación PFA (solo sign restrictions) ─────────────────────
-fprintf('--- PASO 1: Estimacion PFA (sign restrictions) ---\n');
-fprintf('    Spec: spec_oil_pfa  |  nd=%d (testing)\n', 500);
-fprintf('    Puede tomar varios minutos...\n\n');
-
-main('spec_oil_pfa');
-
-% Recuperar Results del workspace (main los deja en el caller si no guarda)
-% Alternativa: cargar el .mat si SAVE_RESULTS=true. Aquí re-corremos para
-% obtener Results explícitamente.
-Cfg_pfa = struct();
-run(fullfile(ex_root, 'config', 'spec_oil_pfa.m'));
-Cfg_pfa = Cfg;
+%% ── Cargar specs ─────────────────────────────────────────────────────────
 clear Cfg;
+run(fullfile(ex_root, 'config', 'spec_oil_pfa.m'));
+Cfg_pfa = Cfg; clear Cfg;
 
-rng(Cfg_pfa.SEED);
-Dataset_pfa  = load_data(Cfg_pfa);
-Post_pfa     = build_posterior(Dataset_pfa, Cfg_pfa);
-rng(Cfg_pfa.SEED);
-Results_pfa  = run_pfa(Post_pfa, Cfg_pfa);
+clear Cfg;
+run(fullfile(ex_root, 'config', 'spec_oil_is.m'));
+Cfg_is = Cfg; clear Cfg;
 
-fprintf('\n--- Resumen IRF — PFA (shock de oferta) ---\n');
+% Testing: nd=500; para producción cambiar a 5000
+Cfg_pfa.ND         = 500;
+Cfg_pfa.PLOT_IRFS  = false;
+Cfg_is.ND          = 500;
+Cfg_is.MAX_IS_DRAWS = 500;
+Cfg_is.PLOT_IRFS   = false;
+
+%% ── PASO 1: PFA ──────────────────────────────────────────────────────────
+fprintf('--- PASO 1: Estimacion PFA (nd=%d) ---\n', Cfg_pfa.ND);
+rng(Cfg_pfa.SEED);
+Dataset_pfa = load_data(Cfg_pfa);
+Post_pfa    = build_posterior(Dataset_pfa, Cfg_pfa);
+rng(Cfg_pfa.SEED);
+Results_pfa = run_pfa(Post_pfa, Cfg_pfa);
+
+fprintf('\n--- Resumen IRF PFA (shock de oferta) ---\n');
 print_summary(Results_pfa.LtildeStruct, Dataset_pfa, Cfg_pfa);
 
-%% ── PASO 2: Estimación IS (sign + zero restriction) ─────────────────────
-fprintf('\n--- PASO 2: Estimacion IS (sign + zero restrictions) ---\n');
-fprintf('    Spec: spec_oil_is  |  nd=%d (testing)\n', 500);
-fprintf('    Puede tomar varios minutos...\n\n');
-
-Cfg_is = struct();
-run(fullfile(ex_root, 'config', 'spec_oil_is.m'));
-Cfg_is = Cfg;
-clear Cfg;
-
+%% ── PASO 2: IS ───────────────────────────────────────────────────────────
+fprintf('\n--- PASO 2: Estimacion IS (nd=%d) ---\n', Cfg_is.ND);
 rng(Cfg_is.SEED);
-Dataset_is   = load_data(Cfg_is);
-Post_is      = build_posterior(Dataset_is, Cfg_is);
+Dataset_is = load_data(Cfg_is);
+Post_is    = build_posterior(Dataset_is, Cfg_is);
 rng(Cfg_is.SEED);
-Results_is   = run_is(Post_is, Cfg_is);
+Results_is = run_is(Post_is, Cfg_is);
 
-fprintf('\n--- Resumen IRF — IS (shock de oferta) ---\n');
+fprintf('\n--- Resumen IRF IS (shock de oferta) ---\n');
 print_summary(Results_is.LtildeStruct, Dataset_is, Cfg_is);
 
-%% ── PASO 3: Exportar resultados PFA a Excel ──────────────────────────────
-fprintf('\n--- PASO 3: Exportando resultados PFA a Excel ---\n');
-Cfg_pfa.SPEC_NAME = 'spec_oil_pfa';
-
-% Asegurar que el directorio de output existe
+%% ── PASO 3: Exportar PFA ─────────────────────────────────────────────────
+fprintf('\n--- PASO 3: Exportando resultados PFA ---\n');
 out_dir = fullfile(ref_root, 'output', 'tables');
-if ~isfolder(out_dir)
-    mkdir(out_dir);
-end
-
+if ~isfolder(out_dir), mkdir(out_dir); end
 export_results(Results_pfa, Dataset_pfa, Cfg_pfa);
 
-%% ── PASO 4: Diagnóstico final ────────────────────────────────────────────
+%% ── Diagnóstico final ────────────────────────────────────────────────────
+accept_rate = sum(Results_is.uw > 0) / Cfg_is.ND;
 fprintf('\n================================================================\n');
 fprintf('  RESULTADO FINAL\n');
-fprintf('================================================================\n');
-fprintf('  PFA  nd       : %d draws\n',    Cfg_pfa.ND);
-fprintf('  IS   nd       : %d draws\n',    Cfg_is.ND);
-fprintf('  IS   ne (ESS) : %d\n',          Results_is.ne);
-accept_rate = sum(Results_is.uw > 0) / Cfg_is.ND;
-fprintf('  IS   acept.   : %.4f\n',        accept_rate);
-fprintf('  Variables     : %s\n',          strjoin(Dataset_pfa.var_names, ', '));
-fprintf('  Frecuencia    : %s\n',          Dataset_pfa.freq);
-fprintf('  Horizonte IRF : %d meses\n',    Cfg_pfa.HORIZON);
-fprintf('\n');
-fprintf('Para produccion: aumentar nd a 5000 (PFA) y ND a 5000 (IS).\n');
+fprintf('  PFA nd       : %d\n', Cfg_pfa.ND);
+fprintf('  IS  nd       : %d  |  ne(ESS)=%d  |  acept=%.4f\n', ...
+        Cfg_is.ND, Results_is.ne, accept_rate);
+fprintf('  Variables    : %s\n', strjoin(Dataset_pfa.var_names, ', '));
+fprintf('  Frecuencia   : %s  |  Horizonte: %d meses\n', ...
+        Dataset_pfa.freq, Cfg_pfa.HORIZON);
+fprintf('  Para produccion: aumentar ND a 5000 en ambas specs.\n');
 fprintf('================================================================\n\n');
