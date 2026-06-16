@@ -326,7 +326,7 @@ try
     Post_bnw_p = build_posterior(DS_bnw_p, Cfg_bnw_p);
     rng(0);
     R_bnw_p   = run_pfa(Post_bnw_p, Cfg_bnw_p);
-    v_d1      = R_bnw_p.LtildeStruct.Ltilde(1,1,1);
+    v_d1      = R_bnw_p.LtildeStruct.data(1,1,1);
     [n_pass, n_fail] = rpt(n_pass, n_fail, 'D1: BNW PFA Ltilde(1,1,1)==0 (zero restriction)', ...
         abs(v_d1) < 1e-8, sprintf('valor=%.10f', v_d1));
 catch ME_d1
@@ -345,7 +345,7 @@ try
     Post_bnw_i = build_posterior(DS_bnw_i, Cfg_bnw_i);
     rng(0);
     R_bnw_i    = run_is(Post_bnw_i, Cfg_bnw_i);
-    v_d2       = R_bnw_i.LtildeStruct.Ltilde(1,1,1,1);
+    v_d2       = R_bnw_i.LtildeStruct.data(1,1,1,1);
     [n_pass, n_fail] = rpt(n_pass, n_fail, 'D2: BNW IS Ltilde(1,1,1,1)==0 (zero restriction)', ...
         abs(v_d2) < 1e-8, sprintf('valor=%.10f', v_d2));
 catch ME_d2
