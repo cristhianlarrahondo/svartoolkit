@@ -14,10 +14,10 @@ function validate_lote5()
 %
 %   C) INTEGRACION FUNCIONAL:
 %      C1. Minnesota: build_posterior + run_pfa corre sin error
-%      C2. Sims-Zha:  lanza error informativo (no soportado con datos en niveles)
+%      C2. Sims-Zha:  build_posterior + run_pfa corre (con warning de escala)
 %      C3. NIW custom: build_posterior + run_pfa corre sin error
 %      C4. Natural conjugate: build_posterior + run_pfa corre sin error
-%      C5. run_prior_sensitivity: 4 priors soportados, tabla con diferencias visibles
+%      C5. run_prior_sensitivity: 5 priors, tabla con diferencias visibles
 %      C6. Error si Cfg.PRIOR.type no reconocido
 %      C7. Error si faltan hiperparametros requeridos (minnesota sin lambda2)
 %      C8. Error si faltan hiperparametros requeridos (niw_custom sin Phi_bar)
@@ -119,18 +119,20 @@ fprintf('  ||OomegaTilde_minn - OomegaTilde_diff|| = %.6e\n', diff_omega_b1);
 fprintf('  ||PpsiTilde_minn   - PpsiTilde_diff||   = %.6e  (media prior RW != 0)\n', diff_psi_b1);
 [all_pass, failed_tags] = emit(pass_B1, 'B1', all_pass, failed_tags);
 
-%% B2 — Sims-Zha: debe lanzar error informativo (no soportado con datos en niveles)
-fprintf('--- B2: Sims-Zha lanza error informativo ---\n');
-try
-    Cfg_b2       = Cfg_pfa;
-    Cfg_b2.PRIOR = struct('type','sims_zha', 'mu5',0.5, 'mu6',0.5);
-    build_posterior(Dataset_pfa, Cfg_b2);
-    pass_B2 = false; fprintf('  No lanzo error — FALLA\n');
-catch ME
-    pass_B2 = contains(ME.identifier, 'build_posterior');
-    fprintf('  Error capturado correctamente: %s\n', ME.identifier);
-    fprintf('  Mensaje: %s\n', ME.message);
-end
+%% B2 — Sims-Zha: posterior diferente a diffuse + warning de escala esperado
+fprintf('--- B2: Sims-Zha posterior diferente a diffuse ---\n');
+% Suprimir warning de escala: es esperado con datos en log-niveles
+ws = warning('off', 'build_posterior:simsZhaScale');
+Cfg_b2       = Cfg_pfa;
+Cfg_b2.PRIOR = struct('type','sims_zha', 'mu5',0.5, 'mu6',0.5);
+Post_b2      = build_posterior(Dataset_pfa, Cfg_b2);
+warning(ws);   % restaurar estado de warnings
+diff_omega_b2 = norm(Post_b2.OomegaTilde - Post_diff.OomegaTilde, 'fro');
+fprintf('  ||OomegaTilde_sz - OomegaTilde_diff|| = %.6e\n', diff_omega_b2);
+fprintf('  T_eff con dummies: %d  (T_original=%d, agrega n+1=%d filas)\n', ...
+    Post_b2.nnuTilde, Post_diff.T, n_var+1);
+fprintf('  NOTA: warning de escala es esperado con datos en log-niveles.\n');
+pass_B2 = (diff_omega_b2 > tol);
 [all_pass, failed_tags] = emit(pass_B2, 'B2', all_pass, failed_tags);
 
 %% B3 — NIW custom: Omega_bar informativa (shrinkage fuerte), Phi_bar escalada
@@ -191,16 +193,24 @@ catch ME
 end
 [all_pass, failed_tags] = emit(pass_C1, 'C1', all_pass, failed_tags);
 
-%% C2 — Sims-Zha: no soportado, debe lanzar error con mensaje claro
-fprintf('--- C2: Sims-Zha lanza error informativo ---\n');
+%% C2 — Sims-Zha: build_posterior + run_pfa corre; warning de escala esperado
+fprintf('--- C2: Sims-Zha build_posterior + run_pfa ---\n');
 try
     Cfg_c2       = Cfg_pfa;
     Cfg_c2.PRIOR = struct('type','sims_zha', 'mu5',0.5, 'mu6',0.5);
-    build_posterior(Dataset_pfa, Cfg_c2);
-    pass_C2 = false; fprintf('  No lanzo error — FALLA\n');
+    Cfg_c2.ND    = 500;
+    ws = warning('off', 'build_posterior:simsZhaScale');
+    Post_c2      = build_posterior(Dataset_pfa, Cfg_c2);
+    warning(ws);
+    rng(0);
+    Res_c2       = run_pfa(Post_c2, Cfg_c2);
+    has_ltilde   = isfield(Res_c2, 'LtildeStruct') && ~isempty(Res_c2.LtildeStruct.data);
+    pass_C2 = has_ltilde;
+    fprintf('  LtildeStruct presente: %d | T_eff: %d (original: %d)\n', ...
+        has_ltilde, Post_c2.nnuTilde, Post_diff.T);
+    fprintf('  NOTA: warning de escala suprimido en test; usar con datos transformados.\n');
 catch ME
-    pass_C2 = contains(ME.identifier, 'build_posterior');
-    fprintf('  Error capturado correctamente: %s\n', ME.identifier);
+    pass_C2 = false; fprintf('  Error: %s\n', ME.message);
 end
 [all_pass, failed_tags] = emit(pass_C2, 'C2', all_pass, failed_tags);
 
@@ -246,13 +256,16 @@ end
 [all_pass, failed_tags] = emit(pass_C4, 'C4', all_pass, failed_tags);
 
 %% C5 — run_prior_sensitivity: los 5 priors, tabla con diferencias visibles
-fprintf('--- C5: run_prior_sensitivity con los 4 priors soportados ---\n');
+fprintf('--- C5: run_prior_sensitivity con los 5 priors ---\n');
 try
     Cfg_c5    = Cfg_pfa;
     Cfg_c5.ND = 500;
+    % Suprimir warning de escala para sims_zha (esperado con datos en log-niveles)
+    ws_c5 = warning('off', 'build_posterior:simsZhaScale');
     prior_list_c5 = { ...
         struct('type', 'diffuse'), ...
         struct('type', 'minnesota',         'lambda1',0.5, 'lambda2',0.5, 'lambda3',1), ...
+        struct('type', 'sims_zha',          'mu5',0.5, 'mu6',0.5), ...
         struct('type', 'niw_custom',        'nu_bar',n_var+50, ...
                'Phi_bar',diag(sig2_ols)*50, 'Psi_bar',zeros(m_var,n_var), ...
                'Omega_bar',eye(m_var)*0.1), ...
@@ -271,8 +284,9 @@ try
     med_minn = median(Lm(5, 2, :), 'all');
     visibly_different = abs(med_diff - med_minn) > 1e-4;
 
-    pass_C5 = is_cell && (n_res == 4);
-    fprintf('  Retorna cell: %d | n_results: %d (esperado: 4)\n', is_cell, n_res);
+    pass_C5 = is_cell && (n_res == 5);
+    warning(ws_c5);   % restaurar warnings
+    fprintf('  Retorna cell: %d | n_results: %d (esperado: 5)\n', is_cell, n_res);
     fprintf('  Mediana h=4 StockPrices — diffuse: %+.4f | minn: %+.4f | diff: %.4f\n', ...
         med_diff, med_minn, abs(med_diff - med_minn));
     if ~visibly_different
@@ -362,4 +376,5 @@ function [all_pass_out, failed_out] = emit(pass, tag, all_pass_in, failed_in)
         all_pass_out = false; failed_out = [failed_in, {tag}];
     end
 end
+
 
