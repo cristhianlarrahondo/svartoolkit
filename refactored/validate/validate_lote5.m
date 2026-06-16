@@ -117,7 +117,7 @@ fprintf('  ||OomegaTilde_minn - OomegaTilde_diff|| = %.6e  (debe ser > 0)\n', di
 %% B2 — Sims-Zha: OomegaTilde diferente a diffuse
 fprintf('--- B2: Sims-Zha posterior diferente a diffuse ---\n');
 Cfg_b2       = Cfg_pfa;
-Cfg_b2.PRIOR = struct('type','sims_zha', 'lambda1',1.0, 'mu5',1.0, 'mu6',1.0);
+Cfg_b2.PRIOR = struct('type','sims_zha', 'mu5',1.0, 'mu6',1.0);
 Post_b2      = build_posterior(Dataset_pfa, Cfg_b2);
 diff_omega_b2 = norm(Post_b2.OomegaTilde - Post_diff.OomegaTilde, 'fro');
 pass_B2 = (diff_omega_b2 > tol);
@@ -178,7 +178,7 @@ end
 fprintf('--- C2: Sims-Zha build_posterior + run_pfa ---\n');
 try
     Cfg_c2       = Cfg_pfa;
-    Cfg_c2.PRIOR = struct('type','sims_zha', 'lambda1',1.0, 'mu5',1.0, 'mu6',1.0);
+    Cfg_c2.PRIOR = struct('type','sims_zha', 'mu5',1.0, 'mu6',1.0);
     Cfg_c2.ND    = 500;
     Post_c2      = build_posterior(Dataset_pfa, Cfg_c2);
     rng(0);
@@ -241,7 +241,7 @@ try
     prior_list_c5 = { ...
         struct('type', 'diffuse'), ...
         struct('type', 'minnesota', 'lambda1', 0.2, 'lambda2', 0.5, 'lambda3', 1), ...
-        struct('type', 'sims_zha',  'lambda1', 1.0, 'mu5', 1.0, 'mu6', 1.0) ...
+        struct('type', 'sims_zha', 'mu5', 1.0, 'mu6', 1.0) ...
     };
     spec_path_c5 = fullfile(cfg_dir, 'spec_bnw_pfa.m');
     Res_sens = run_prior_sensitivity(spec_path_c5, prior_list_c5, Dataset_pfa, Cfg_c5);
@@ -347,3 +347,4 @@ function [all_pass_out, failed_out] = emit(pass, tag, all_pass_in, failed_in)
         all_pass_out = false; failed_out = [failed_in, {tag}];
     end
 end
+
