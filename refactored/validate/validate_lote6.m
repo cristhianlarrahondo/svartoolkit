@@ -496,12 +496,233 @@ catch ME; fprintf('  [ERROR] %s\n', ME.message); end
 fprintf('\n');
 
 %% ========================================================================
+
+%% ========================================================================
+%% SECCION D — Todas las priors con dummies (nd=500)
+%% ========================================================================
+fprintf('════════════════════════════════════════════════════════════════\n');
+fprintf(' SECCION D — Todas las priors con dummies (nd=%d)\n', ND_FAST);
+fprintf(' Dummy fija: oneoff [1975,6] (Q2 1975)\n');
+fprintf('════════════════════════════════════════════════════════════════\n\n');
+
+% Dummy comun para todos los tests de esta seccion
+DUMMY_D.name = 'test_dummy';
+DUMMY_D.type = 'oneoff';
+DUMMY_D.date = [1975, 6];   % Q2 1975
+
+% Helper: construir Cfg con prior + dummy
+function Cfg = make_cfg_prior_dummy(mode, nd, prior_struct)
+    Cfg = make_cfg_fast(mode, nd);
+    Cfg.PRIOR    = prior_struct;
+    Cfg.DUMMIES  = struct('name','test_dummy','type','oneoff','date',[1975,6]);
+end
+
+function ok = check_pfa(R, PP, nd, prior_name)
+    L  = R.LtildeStruct.data;
+    ok = PP.ndummies == 1 && PP.m == 22 && ...
+         isequal(size(L), [41, 5, nd]) && ...
+         strcmp(PP.prior_type, prior_name);
+end
+
+function ok = check_is(R, PP, prior_name)
+    L  = R.LtildeStruct.data;
+    ok = PP.ndummies == 1 && PP.m == 22 && ...
+         R.ne > 0 && abs(sum(R.imp_w)-1) < 1e-10 && ...
+         size(L,4) > 0 && strcmp(PP.prior_type, prior_name);
+end
+
+%% TEST (D1) — PFA + diffuse + dummy -------------------------------------
+fprintf('--- TEST (D1): PFA + diffuse + dummy (nd=%d) ---\n', ND_FAST);
+try
+    Cfg_d1 = make_cfg_prior_dummy('pfa', ND_FAST, struct('type','diffuse'));
+    D_d1   = load_data(Cfg_d1);
+    PP_d1  = build_posterior(D_d1, Cfg_d1);
+    rng(0); R_d1 = run_pfa(PP_d1, Cfg_d1);
+    if check_pfa(R_d1, PP_d1, ND_FAST, 'diffuse')
+        fprintf('  [PASA] prior=diffuse, m=22, ndummies=1, size(L)=[41,5,%d]\n', ND_FAST);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ndummies=%d\n', PP_d1.prior_type, PP_d1.m, PP_d1.ndummies);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D2) — IS + diffuse + dummy --------------------------------------
+fprintf('--- TEST (D2): IS + diffuse + dummy (nd=%d) ---\n', ND_FAST);
+try
+    Cfg_d2 = make_cfg_prior_dummy('is', ND_FAST, struct('type','diffuse'));
+    D_d2   = load_data(Cfg_d2);
+    PP_d2  = build_posterior(D_d2, Cfg_d2);
+    rng(0); R_d2 = run_is(PP_d2, Cfg_d2);
+    if check_is(R_d2, PP_d2, 'diffuse')
+        fprintf('  [PASA] prior=diffuse, m=22, ndummies=1, ne=%d, sum(w)=1\n', R_d2.ne);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ne=%d\n', PP_d2.prior_type, PP_d2.m, R_d2.ne);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D3) — PFA + minnesota + dummy -----------------------------------
+fprintf('--- TEST (D3): PFA + minnesota + dummy (nd=%d) ---\n', ND_FAST);
+try
+    pr = struct('type','minnesota','lambda1',0.2,'lambda2',0.5,'lambda3',1.0);
+    Cfg_d3 = make_cfg_prior_dummy('pfa', ND_FAST, pr);
+    D_d3   = load_data(Cfg_d3);
+    PP_d3  = build_posterior(D_d3, Cfg_d3);
+    rng(0); R_d3 = run_pfa(PP_d3, Cfg_d3);
+    if check_pfa(R_d3, PP_d3, ND_FAST, 'minnesota')
+        fprintf('  [PASA] prior=minnesota, m=22, ndummies=1, size(L)=[41,5,%d]\n', ND_FAST);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ndummies=%d\n', PP_d3.prior_type, PP_d3.m, PP_d3.ndummies);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D4) — IS + minnesota + dummy ------------------------------------
+fprintf('--- TEST (D4): IS + minnesota + dummy (nd=%d) ---\n', ND_FAST);
+try
+    pr = struct('type','minnesota','lambda1',0.2,'lambda2',0.5,'lambda3',1.0);
+    Cfg_d4 = make_cfg_prior_dummy('is', ND_FAST, pr);
+    D_d4   = load_data(Cfg_d4);
+    PP_d4  = build_posterior(D_d4, Cfg_d4);
+    rng(0); R_d4 = run_is(PP_d4, Cfg_d4);
+    if check_is(R_d4, PP_d4, 'minnesota')
+        fprintf('  [PASA] prior=minnesota, m=22, ndummies=1, ne=%d, sum(w)=1\n', R_d4.ne);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ne=%d\n', PP_d4.prior_type, PP_d4.m, R_d4.ne);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D5) — PFA + sims_zha + dummy ------------------------------------
+fprintf('--- TEST (D5): PFA + sims_zha + dummy (nd=%d) ---\n', ND_FAST);
+try
+    pr = struct('type','sims_zha','mu5',0.5,'mu6',0.5);
+    Cfg_d5 = make_cfg_prior_dummy('pfa', ND_FAST, pr);
+    D_d5   = load_data(Cfg_d5);
+    ws = warning('off','build_posterior:simsZhaScale');
+    PP_d5  = build_posterior(D_d5, Cfg_d5);
+    warning(ws);
+    rng(0); R_d5 = run_pfa(PP_d5, Cfg_d5);
+    if check_pfa(R_d5, PP_d5, ND_FAST, 'sims_zha')
+        fprintf('  [PASA] prior=sims_zha, m=22, ndummies=1, size(L)=[41,5,%d]\n', ND_FAST);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ndummies=%d\n', PP_d5.prior_type, PP_d5.m, PP_d5.ndummies);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D6) — IS + sims_zha + dummy -------------------------------------
+fprintf('--- TEST (D6): IS + sims_zha + dummy (nd=%d) ---\n', ND_FAST);
+try
+    pr = struct('type','sims_zha','mu5',0.5,'mu6',0.5);
+    Cfg_d6 = make_cfg_prior_dummy('is', ND_FAST, pr);
+    D_d6   = load_data(Cfg_d6);
+    ws = warning('off','build_posterior:simsZhaScale');
+    PP_d6  = build_posterior(D_d6, Cfg_d6);
+    warning(ws);
+    rng(0); R_d6 = run_is(PP_d6, Cfg_d6);
+    if check_is(R_d6, PP_d6, 'sims_zha')
+        fprintf('  [PASA] prior=sims_zha, m=22, ndummies=1, ne=%d, sum(w)=1\n', R_d6.ne);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ne=%d\n', PP_d6.prior_type, PP_d6.m, R_d6.ne);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D7) — PFA + niw_custom + dummy ----------------------------------
+fprintf('--- TEST (D7): PFA + niw_custom + dummy (nd=%d) ---\n', ND_FAST);
+try
+    % Necesitamos sig2 de OLS para armar Phi_bar; lo obtenemos de build_posterior diffuse
+    D_tmp  = load_data(make_cfg());
+    PP_tmp = build_posterior(D_tmp, make_cfg());
+    sig2   = diag(PP_tmp.Sigmau);
+    n_v    = PP_tmp.n;  m_v = PP_tmp.m + 1;  % m con la dummy extra
+
+    pr = struct('type','niw_custom', ...
+                'nu_bar',    n_v + 50, ...
+                'Phi_bar',   diag(sig2) * 50, ...
+                'Psi_bar',   zeros(m_v, n_v), ...
+                'Omega_bar', eye(m_v) * 0.1);
+    Cfg_d7 = make_cfg_prior_dummy('pfa', ND_FAST, pr);
+    D_d7   = load_data(Cfg_d7);
+    PP_d7  = build_posterior(D_d7, Cfg_d7);
+    rng(0); R_d7 = run_pfa(PP_d7, Cfg_d7);
+    if check_pfa(R_d7, PP_d7, ND_FAST, 'niw_custom')
+        fprintf('  [PASA] prior=niw_custom, m=22, ndummies=1, size(L)=[41,5,%d]\n', ND_FAST);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ndummies=%d\n', PP_d7.prior_type, PP_d7.m, PP_d7.ndummies);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D8) — IS + niw_custom + dummy -----------------------------------
+fprintf('--- TEST (D8): IS + niw_custom + dummy (nd=%d) ---\n', ND_FAST);
+try
+    D_tmp  = load_data(make_cfg());
+    PP_tmp = build_posterior(D_tmp, make_cfg());
+    sig2   = diag(PP_tmp.Sigmau);
+    n_v    = PP_tmp.n;  m_v = PP_tmp.m + 1;
+
+    pr = struct('type','niw_custom', ...
+                'nu_bar',    n_v + 50, ...
+                'Phi_bar',   diag(sig2) * 50, ...
+                'Psi_bar',   zeros(m_v, n_v), ...
+                'Omega_bar', eye(m_v) * 0.1);
+    Cfg_d8 = make_cfg_prior_dummy('is', ND_FAST, pr);
+    D_d8   = load_data(Cfg_d8);
+    PP_d8  = build_posterior(D_d8, Cfg_d8);
+    rng(0); R_d8 = run_is(PP_d8, Cfg_d8);
+    if check_is(R_d8, PP_d8, 'niw_custom')
+        fprintf('  [PASA] prior=niw_custom, m=22, ndummies=1, ne=%d, sum(w)=1\n', R_d8.ne);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ne=%d\n', PP_d8.prior_type, PP_d8.m, R_d8.ne);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D9) — PFA + natural_conjugate + dummy ---------------------------
+fprintf('--- TEST (D9): PFA + natural_conjugate + dummy (nd=%d) ---\n', ND_FAST);
+try
+    pr = struct('type','natural_conjugate', ...
+                'lambda1',0.5,'lambda2',0.5,'lambda3',1.0,'nu_bar',50);
+    Cfg_d9 = make_cfg_prior_dummy('pfa', ND_FAST, pr);
+    D_d9   = load_data(Cfg_d9);
+    PP_d9  = build_posterior(D_d9, Cfg_d9);
+    rng(0); R_d9 = run_pfa(PP_d9, Cfg_d9);
+    if check_pfa(R_d9, PP_d9, ND_FAST, 'natural_conjugate')
+        fprintf('  [PASA] prior=natural_conjugate, m=22, ndummies=1, size(L)=[41,5,%d]\n', ND_FAST);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ndummies=%d\n', PP_d9.prior_type, PP_d9.m, PP_d9.ndummies);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% TEST (D10) — IS + natural_conjugate + dummy ---------------------------
+fprintf('--- TEST (D10): IS + natural_conjugate + dummy (nd=%d) ---\n', ND_FAST);
+try
+    pr = struct('type','natural_conjugate', ...
+                'lambda1',0.5,'lambda2',0.5,'lambda3',1.0,'nu_bar',50);
+    Cfg_d10 = make_cfg_prior_dummy('is', ND_FAST, pr);
+    D_d10   = load_data(Cfg_d10);
+    PP_d10  = build_posterior(D_d10, Cfg_d10);
+    rng(0); R_d10 = run_is(PP_d10, Cfg_d10);
+    if check_is(R_d10, PP_d10, 'natural_conjugate')
+        fprintf('  [PASA] prior=natural_conjugate, m=22, ndummies=1, ne=%d, sum(w)=1\n', R_d10.ne);
+    else
+        fprintf('  [FALLO] prior=%s, m=%d, ne=%d\n', PP_d10.prior_type, PP_d10.m, R_d10.ne);
+    end
+catch ME; fprintf('  [ERROR] %s\n', ME.message); end
+fprintf('\n');
+
+%% ========================================================================
 %% Resumen
 %% ========================================================================
 fprintf('════════════════════════════════════════════════════════════════\n');
 fprintf(' VALIDATE_LOTE6 completado.\n');
-fprintf(' Seccion A (loader/dummies): tests a-i\n');
-fprintf(' Seccion B (regresion numerica): B1=PFA exacto, B2=IS exacto\n');
-fprintf(' Seccion C (integracion, nd=%d): C1-C5\n', ND_FAST);
+fprintf(' Seccion A (loader/dummies):       tests (a)-(i)  —  9 tests\n');
+fprintf(' Seccion B (regresion numerica):   B1=PFA, B2=IS  —  2 tests\n');
+fprintf(' Seccion C (integracion nd=%d):   C1-C5          —  5 tests\n', ND_FAST);
+fprintf(' Seccion D (priors x modos):       D1-D10         — 10 tests\n');
+fprintf(' Total: 26 tests\n');
 fprintf(' Reportar PASA/FALLO al chat.\n');
 fprintf('════════════════════════════════════════════════════════════════\n\n');
