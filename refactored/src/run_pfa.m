@@ -74,7 +74,7 @@ while record <= nd
     cholSigmadraw = hh(Sigmadraw);    % lower = chol(S)' — igual que hh(S)' del original
     Bdraw         = kron(cholSigmadraw, cholOomegaTilde) * randn(m*n, 1) ...
                     + reshape(PpsiTilde, n*m, 1);
-    Bdraw         = reshape(Bdraw, n*p + Cfg.NEX, n);
+    Bdraw         = reshape(Bdraw, PosteriorParams.m, n);  % usa m de PosteriorParams (incluye dummies)
 
     % Guardar draws
     Bdraws{record,1}     = Bdraw;
@@ -140,5 +140,6 @@ Results.t_elapsed    = toc(t_start);
 print_run_summary(Cfg, Results, Results.t_elapsed);
 
 end
+
 
 
