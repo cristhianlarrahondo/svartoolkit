@@ -132,13 +132,21 @@ switch prior_type
     %
     % mu5 (co-persistence): agrega n filas. Prior de que cada variable
     %   sigue su propio random walk (suma de coefs propios = 1).
-    %   Y_d1 = diag(y0)/mu5  [n x n]
-    %   X_d1: bloque lag l = diag(y0)/mu5, constante = 0
+    %   Y_d1 = diag(y0_s)/mu5  [n x n]   con y0_s = y0 ./ sigma
+    %   X_d1: bloque lag l = diag(y0_s)/mu5, constante = 0
     %
     % mu6 (co-integration): agrega 1 fila. Prior de que las variables
     %   comparten una tendencia comun.
-    %   Y_d2 = y0/mu6  [1 x n]
-    %   X_d2: bloque lag l = y0/mu6, constante = 1/mu6
+    %   Y_d2 = y0_s/mu6  [1 x n]
+    %   X_d2: bloque lag l = y0_s/mu6, constante = 1/mu6
+    %
+    % NOTA SOBRE ESCALA: Sims & Zha (1998) asumian datos demeaned/en
+    % diferencias con y0 ~ O(1). Con datos en log-niveles (BNW: y0 ~ O(100)
+    % a O(1000)), los dummies sin normalizar dominan los datos reales.
+    % Solucion estandar (BEAR toolbox BCE, Banbura et al.): normalizar y0
+    % por sigma_j (desv. estandar OLS de cada ecuacion) antes de construir
+    % los dummies. Esto hace y0_scaled ~ O(1) independientemente de la
+    % escala de los datos.
     %
     % Valores grandes de mu5/mu6 => prior debil (dummies pesan menos).
     % Valores pequenos (e.g. 1) => prior fuerte.
@@ -151,12 +159,18 @@ switch prior_type
         % Media de las observaciones pre-muestra (primeros p periodos)
         y0 = mean(num(1:p, :), 1);   % [1 x n]
 
+        % Normalizar y0 por sigma OLS para hacer los dummies comparables
+        % con los datos independientemente de la escala de las variables.
+        % y0_s[j] = y0[j] / sigma_j  => y0_s ~ O(1) para todas las vars.
+        sigma_j = sqrt(sig2)';        % [1 x n]
+        y0_s    = y0 ./ sigma_j;      % [1 x n], normalizado por ecuacion
+
         % Dummy 1: co-persistence (mu5)
         if mu5 > 0
-            Y_d1 = diag(y0) / mu5;        % [n x n]
+            Y_d1 = diag(y0_s) / mu5;        % [n x n]
             X_d1 = zeros(n, m);
             for l = 1:p
-                X_d1(:, (l-1)*n+1:l*n) = diag(y0) / mu5;
+                X_d1(:, (l-1)*n+1:l*n) = diag(y0_s) / mu5;
             end
         else
             Y_d1 = zeros(0, n);  X_d1 = zeros(0, m);
@@ -164,10 +178,10 @@ switch prior_type
 
         % Dummy 2: co-integration (mu6)
         if mu6 > 0
-            Y_d2 = y0 / mu6;              % [1 x n]
+            Y_d2 = y0_s / mu6;              % [1 x n]
             X_d2 = zeros(1, m);
             for l = 1:p
-                X_d2(1, (l-1)*n+1:l*n) = y0 / mu6;
+                X_d2(1, (l-1)*n+1:l*n) = y0_s / mu6;
             end
             if nex >= 1
                 X_d2(1, m) = 1 / mu6;
@@ -317,3 +331,4 @@ function check_required_fields(pr, fields, prior_name)
         end
     end
 end
+
