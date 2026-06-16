@@ -284,7 +284,7 @@ try
     PP_b1 = build_posterior(D_b1, Cfg_b1);
     rng(0);
     R_b1  = run_pfa(PP_b1, Cfg_b1);
-    L = R_b1.LtildeStruct.Ldata;
+    L = R_b1.LtildeStruct.data;
     v1 = abs(L(1,1,1)             - REF_PFA_L1)   < TOL_NUM;
     v2 = abs(L(end,end,end)       - REF_PFA_Lend)  < TOL_NUM;
     v3 = abs(median(L(:,2,:),'all') - REF_PFA_med2) < TOL_NUM;
@@ -326,7 +326,7 @@ try
     PP_b2 = build_posterior(D_b2, Cfg_b2);
     rng(0);
     R_b2  = run_is(PP_b2, Cfg_b2);
-    L = R_b2.LtildeStruct.Ldata;
+    L = R_b2.LtildeStruct.data;
     v1 = abs(L(1,1,1,1)               - REF_IS_L1)   < TOL_NUM;
     v2 = abs(L(end,end,end,end)        - REF_IS_Lend)  < TOL_NUM;
     v3 = abs(median(L(:,2,1,:),'all')  - REF_IS_med2)  < TOL_NUM;
@@ -379,7 +379,7 @@ try
     PP_c1 = build_posterior(D_c1, Cfg_c1);
     rng(0);
     R_c1  = run_pfa(PP_c1, Cfg_c1);
-    L = R_c1.LtildeStruct.Ldata;
+    L = R_c1.LtildeStruct.data;
     ok_m    = PP_c1.m == 22 && PP_c1.ndummies == 1;
     ok_size = isequal(size(L), [41, 5, ND_FAST]);
     ok_z    = L(1,1,1) == 0;   % restriccion de cero en h=0
@@ -405,7 +405,7 @@ try
     ok_m    = PP_c2.m == 22 && PP_c2.ndummies == 1;
     ok_ne   = R_c2.ne > 0;
     ok_w    = abs(sum(R_c2.imp_w) - 1) < 1e-10;
-    L = R_c2.LtildeStruct.Ldata;
+    L = R_c2.LtildeStruct.data;
     ok_size = size(L,1)==41 && size(L,2)==5 && size(L,3)==5 && size(L,4)>0;
     if ok_m && ok_ne && ok_w && ok_size
         fprintf('  [PASA] m=22, ndummies=1, ne=%d, sum(imp_w)=1, size(Ltilde)=[41,5,5,%d]\n', ...
@@ -428,7 +428,7 @@ try
     PP_c3 = build_posterior(D_c3, Cfg_c3);
     rng(0);
     R_c3  = run_pfa(PP_c3, Cfg_c3);
-    L = R_c3.LtildeStruct.Ldata;
+    L = R_c3.LtildeStruct.data;
     ok = PP_c3.m==21 && PP_c3.ndummies==0 && ...
          isequal(size(L),[41,5,ND_FAST]) && ...
          strcmp(PP_c3.prior_type,'minnesota');
@@ -456,7 +456,7 @@ try
     PP_c4 = build_posterior(D_c4, Cfg_c4);
     rng(0);
     R_c4  = run_pfa(PP_c4, Cfg_c4);
-    L = R_c4.LtildeStruct.Ldata;
+    L = R_c4.LtildeStruct.data;
     ok = PP_c4.m==23 && PP_c4.ndummies==2 && ...
          isequal(size(L),[41,5,ND_FAST]) && ...
          strcmp(PP_c4.prior_type,'minnesota');
@@ -483,7 +483,7 @@ try
     PP_c5 = build_posterior(D_c5, Cfg_c5);
     rng(0);
     R_c5  = run_is(PP_c5, Cfg_c5);
-    L = R_c5.LtildeStruct.Ldata;
+    L = R_c5.LtildeStruct.data;
     ok = PP_c5.m==22 && PP_c5.ndummies==1 && ...
          R_c5.ne > 0 && abs(sum(R_c5.imp_w)-1)<1e-10 && ...
          size(L,4)>0 && strcmp(PP_c5.prior_type,'minnesota');
