@@ -161,25 +161,30 @@ switch prior_type
 
     % ── Prior 2: Sims-Zha ─────────────────────────────────────────────────
     % Dummy observations: suma de coeficientes + tendencia comun.
-    % Se augmentan Y y X con filas de dummies y se calcula el posterior
-    % sobre los datos aumentados.
-    % Ref: Sims y Zha (1998)
+    % Exactamente dos bloques de dummies segun Sims y Zha (1998):
+    %   mu5: prior de suma de coeficientes (cointegration prior)
+    %   mu6: prior de tendencia comun (co-persistence prior)
+    % Se augmentan Y y X con estos dummies y se calcula el posterior
+    % sobre los datos aumentados con prior difuso encima.
+    % Ref: Sims y Zha (1998); Kadiyala y Karlsson (1997) Sec. 3.2
     case 'sims_zha'
         pr = Cfg.PRIOR;
-        required_fields = {'lambda1', 'mu5', 'mu6'};
+        required_fields = {'mu5', 'mu6'};
         check_required_fields(pr, required_fields, 'sims_zha');
 
-        lambda1 = pr.lambda1;
-        mu5     = pr.mu5;
-        mu6     = pr.mu6;
+        mu5 = pr.mu5;
+        mu6 = pr.mu6;
 
         % Media de las observaciones iniciales (promedio de los primeros p periodos)
-        y0 = mean(num(1:p, :), 1);   % [1 x n], media de las obs pre-muestra
+        % Usada como referencia de nivel para los dummies
+        y0 = mean(num(1:p, :), 1);   % [1 x n]
 
-        % ── Dummy 1: Suma de coeficientes (mu5) ──────────────────────────
-        % T_d1 filas, una por variable (n filas)
-        % Y_d1 = diag(mu5 * y0) / mu5  =>  Y_d1 = diag(y0)
-        % X_d1: todas las filas de lags son diag(y0), constante = 0
+        % ── Dummy 1: Suma de coeficientes / co-persistence (mu5) ─────────
+        % n filas. Implementa el prior de que la suma de coeficientes de
+        % cada variable sobre sus propios lags es 1 (persistencia unitaria).
+        % Y_d1 = diag(y0) / mu5    [n x n]
+        % X_d1: cada fila j tiene diag(y0)/mu5 en los bloques de lag l=1..p
+        %        y cero en la constante
         if mu5 > 0
             Y_d1 = diag(y0) / mu5;
             X_d1 = zeros(n, m);
@@ -192,10 +197,11 @@ switch prior_type
             X_d1 = zeros(0, m);
         end
 
-        % ── Dummy 2: Tendencia comun (mu6) ───────────────────────────────
-        % 1 fila adicional
-        % Y_d2 = y0 / mu6
-        % X_d2: lags = y0/mu6, constante = 1/mu6
+        % ── Dummy 2: Tendencia comun / co-integration (mu6) ──────────────
+        % 1 fila. Implementa el prior de que las variables comparten una
+        % tendencia comun (suma de todos los lags = identidad, constante ~ 0).
+        % Y_d2 = y0 / mu6          [1 x n]
+        % X_d2: bloque lag l = y0/mu6, constante = 1/mu6
         if mu6 > 0
             Y_d2 = y0 / mu6;
             X_d2 = zeros(1, m);
@@ -210,28 +216,12 @@ switch prior_type
             X_d2 = zeros(0, m);
         end
 
-        % ── Dummy 3: Prior de tightness (lambda1) ────────────────────────
-        % n*p filas: shrinkage de lags
-        % Para cada variable j y lag l:
-        %   Y row: zeros(1,n), X row: e_j * sigma_j * l^lambda1
-        sigma_ols = sqrt(diag(Sigmau));
-        Y_d3 = zeros(n*p, n);
-        X_d3 = zeros(n*p, m);
-        row = 0;
-        for l = 1:p
-            for j = 1:n
-                row = row + 1;
-                X_d3(row, (l-1)*n + j) = sigma_ols(j) * l^lambda1;
-            end
-        end
-        % Y_d3 queda en cero (prior media = 0 para coeficientes de lags)
-
-        % Augmentar Y y X
-        Y_aug = [Y; Y_d1; Y_d2; Y_d3];
-        X_aug = [X; X_d1; X_d2; X_d3];
+        % Augmentar Y y X solo con los dos bloques de Sims-Zha
+        Y_aug = [Y; Y_d1; Y_d2];
+        X_aug = [X; X_d1; X_d2];
         T_eff = size(Y_aug, 1);
 
-        % Prior difuso sobre datos augmentados
+        % Prior difuso sobre datos augmentados (igual que diffuse)
         nnuBar           = 0;
         OomegaBarInverse = zeros(m);
         PpsiBar          = zeros(m, n);
@@ -364,3 +354,4 @@ function check_required_fields(pr, fields, prior_name)
         end
     end
 end
+
