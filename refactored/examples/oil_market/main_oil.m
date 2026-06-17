@@ -11,6 +11,7 @@
 %
 %   Uso desde MATLAB (cualquier working directory):
 %     >> run('ruta/a/refactored/examples/oil_market/main_oil.m')
+%   O bien ejecutar el archivo completo con F5 (no sección a sección con F9).
 %
 %   Convenciones de ruta: NUNCA se usa pwd, cd, ni '..'.
 
@@ -21,8 +22,22 @@ fprintf('  Algoritmo: Arias, Rubio-Ramirez y Waggoner (2018)\n');
 fprintf('================================================================\n\n');
 
 %% ── Rutas ────────────────────────────────────────────────────────────────
-ex_root  = fileparts(mfilename('fullpath'));    % .../examples/oil_market/
-ref_root = fileparts(fileparts(ex_root));       % .../refactored/
+% mfilename('fullpath') devuelve ruta temporal cuando el Editor ejecuta
+% secciones (%%) — en ese caso usamos which() para obtener la ruta real.
+this_file = mfilename('fullpath');
+if contains(this_file, tempdir) || isempty(this_file)
+    % Ejecutando desde el Editor (sección) o sin nombre: usar which()
+    this_file = which('main_oil');
+end
+if isempty(this_file)
+    error('main_oil:pathError', ...
+        ['No se puede resolver la ruta de main_oil.m.\n' ...
+         'Asegurate de que refactored/ esté en el MATLAB path, o\n' ...
+         'ejecuta el archivo completo con F5 en lugar de sección a sección.']);
+end
+
+ex_root  = fileparts(this_file);           % .../examples/oil_market/
+ref_root = fileparts(fileparts(ex_root));  % .../refactored/
 
 addpath(fullfile(ref_root, 'src'));
 addpath(fullfile(ref_root, 'config'));
@@ -49,11 +64,11 @@ run(fullfile(ex_root, 'config', 'spec_oil_is.m'));
 Cfg_is = Cfg; clear Cfg;
 
 % Testing: nd=500; para producción cambiar a 5000
-Cfg_pfa.ND         = 500;
-Cfg_pfa.PLOT_IRFS  = false;
-Cfg_is.ND          = 500;
+Cfg_pfa.ND          = 500;
+Cfg_pfa.PLOT_IRFS   = false;
+Cfg_is.ND           = 500;
 Cfg_is.MAX_IS_DRAWS = 500;
-Cfg_is.PLOT_IRFS   = false;
+Cfg_is.PLOT_IRFS    = false;
 
 %% ── PASO 1: PFA ──────────────────────────────────────────────────────────
 fprintf('--- PASO 1: Estimacion PFA (nd=%d) ---\n', Cfg_pfa.ND);
