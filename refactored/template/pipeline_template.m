@@ -86,7 +86,7 @@ else
     fprintf('  Fin      : %s\n', datestr(dates(end)));
 end
 fprintf('  T (total): %d observaciones\n',   size(Dataset.Y_raw, 1));
-fprintf('  T (model): %d observaciones\n',   size(Dataset.Y, 1));
+fprintf('  T (modelo): %d obs (tras lags: T-%d=%d)\n', Cfg_eda.NLAG, size(Dataset.Y_raw,1), size(Dataset.Y_raw,1)-Cfg_eda.NLAG);
 fprintf('  n (endo) : %d variables\n',       Dataset.nvar);
 fprintf('  p (lags) : %d\n',                 Cfg_eda.NLAG);
 fprintf('════════════════════════════════════════════\n\n');
@@ -95,7 +95,7 @@ fprintf('═══════════════════════�
 endo_mask  = strcmp(Dataset.var_roles, 'endogenous');
 endo_names = Dataset.var_names(endo_mask);
 endo_labs  = Dataset.var_labels(endo_mask);
-Y_data     = Dataset.Y;   % [T x n] muestra efectiva (sin lags iniciales)
+Y_data     = Dataset.Y_raw;   % [T x n] muestra efectiva (sin lags iniciales)
 
 fprintf('  %-4s  %-20s  %-30s  %8s  %8s  %8s  %8s\n', ...
     'Idx', 'Variable', 'Label', 'Media', 'Std', 'Min', 'Max');
