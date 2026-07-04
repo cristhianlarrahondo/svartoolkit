@@ -76,19 +76,25 @@ if ~isfile(xlsx_path)
 end
 
 %% -- Hoja "data" (OBLIGATORIA), referenciada por NOMBRE -----------------
-try
-    opts1 = detectImportOptions(xlsx_path, 'Sheet', 'data');
-catch ME
+% Nota tecnica: el NOMBRE decide QUE hoja se lee (nunca se asume una
+% posicion fija en el archivo), pero la llamada de bajo nivel a
+% detectImportOptions/readtable se hace con el INDICE ya resuelto. Esto
+% evita una diferencia real de deteccion automatica de tipos de columna
+% entre pasar 'Sheet' como nombre (string) y como indice (numerico) que
+% se observo con datos que no son fechas reales de Excel (p.ej. texto
+% "AAAA.T" como en data_bnw.xlsx) y que rompia el parseo de fechas.
+idx_data = p_sheet_index(xlsx_path, 'data');
+if isempty(idx_data)
     error('load_data:sheetDataMissing', ...
-        ['No se encontro la hoja "data" en %s. Las hojas se referencian ' ...
-         'siempre por nombre (nunca por posicion). Error original de ' ...
-         'MATLAB: %s'], xlsx_path, ME.message);
+        ['No se encontro una hoja llamada "data" en %s. Las hojas se ' ...
+         'referencian siempre por nombre (nunca por posicion).'], xlsx_path);
 end
+opts1 = detectImportOptions(xlsx_path, 'Sheet', idx_data);
 
 % Forzar primera columna como datetime
 opts1 = setvaropts(opts1, opts1.VariableNames{1}, 'Type', 'datetime', ...
     'InputFormat', 'dd/MM/yyyy');
-T1 = readtable(xlsx_path, opts1, 'Sheet', 'data');
+T1 = readtable(xlsx_path, opts1, 'Sheet', idx_data);
 
 % Primera columna = fechas datetime; resto = variables numericas
 dates_raw = T1{:, 1};   % datetime array
@@ -115,10 +121,11 @@ Dataset.source_file = xlsx_path;
 Dataset.freq = p_detect_freq(dates_raw);
 
 %% -- Hoja "metadata" (OPCIONAL), referenciada por NOMBRE ----------------
-has_metadata = p_sheet_exists(xlsx_path, 'metadata');
+idx_meta     = p_sheet_index(xlsx_path, 'metadata');
+has_metadata = ~isempty(idx_meta);
 
 if has_metadata
-    T2 = readtable(xlsx_path, 'Sheet', 'metadata', 'ReadVariableNames', true);
+    T2 = readtable(xlsx_path, 'Sheet', idx_meta, 'ReadVariableNames', true);
 
     col_names = lower(T2.Properties.VariableNames);
     idx_name  = find(strcmp(col_names, 'var_name'), 1);
@@ -227,17 +234,23 @@ end
 end
 
 %% ======================================================================
-%% Funcion auxiliar privada: verificar existencia de una hoja por nombre
+%% Funcion auxiliar privada: resolver el INDICE de una hoja via su NOMBRE
 %% ======================================================================
-function tf = p_sheet_exists(xlsx_path, sheet_name)
-%P_SHEET_EXISTS  Verifica si una hoja con el NOMBRE dado existe en el
-%   archivo, sin depender de funciones que no estan disponibles en todas
-%   las versiones de MATLAB (p.ej. sheetnames, introducida en R2020b).
-%   Compatible con MATLAB R2019b+.
+function idx = p_sheet_index(xlsx_path, sheet_name)
+%P_SHEET_INDEX  Resuelve el INDICE de una hoja a partir de su NOMBRE.
+%   Devuelve [] si no existe una hoja con ese nombre.
+%
+%   Se usa el NOMBRE para decidir que hoja leer (nunca se asume una
+%   posicion fija), pero las llamadas a detectImportOptions/readtable se
+%   hacen con el INDICE resuelto aqui, no con el nombre directamente (ver
+%   nota tecnica en el cuerpo principal de load_data).
+%
+%   Compatible con MATLAB R2019b+: usa sheetnames (R2020b+) si esta
+%   disponible, y cae a xlsfinfo (deprecado pero funcional) si no.
 try
-    detectImportOptions(xlsx_path, 'Sheet', sheet_name);
-    tf = true;
+    sheets = sheetnames(xlsx_path);
 catch
-    tf = false;
+    [~, sheets] = xlsfinfo(xlsx_path);
 end
+idx = find(strcmp(sheets, sheet_name), 1);
 end
