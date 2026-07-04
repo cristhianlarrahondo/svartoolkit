@@ -43,6 +43,7 @@ Cfg.S{1} = e_id(2,:);         % S_1 = e_2': StockPrices positivo en h=0
 
 % -- DATOS -------------------------------------------------------------------
 Cfg.DATA_FILE = '';            % vacio -> usa data/data_bnw.xlsx del proyecto
+Cfg.VAR_ROLES = {'endogenous','endogenous','endogenous','endogenous','endogenous'};  % explicita el default (tfp, sp, cons, rir, hours)
 
 % -- TIMING (no aplica en IS) ------------------------------------------------
 Cfg.TIMING_VARIANT = [];
