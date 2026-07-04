@@ -17,6 +17,10 @@ function plot_irfs(LtildeStruct, Dataset, Cfg, Results)
 %     NORM_SHOCK_IDX, NORM_VAR, NORM_HORIZON, NORM_VALUE — según IRF_NORM
 %     SHOCK_IDX     índice del shock a graficar (def: LtildeStruct.shock_idx)
 %     RESP_IDX      índice(s) de variables de respuesta (def: todos)
+%     OUTPUT_DIR    string (OPCIONAL) — ruta absoluta a la carpeta output/
+%                   del proyecto que llama (p.ej. examples/bnw/output/).
+%                   Si no está definido, se usa el comportamiento legado:
+%                   refactored/output/.
 
 %% ── Argumentos opcionales ────────────────────────────────────────────────
 if nargin < 4
@@ -163,9 +167,17 @@ function plot_panel(med_mat, bands_lo, bands_hi, kk, panel_title)
 end
 
 %% ── Ruta de salida ───────────────────────────────────────────────────────
-src_root  = fileparts(mfilename('fullpath'));
-proj_root = fileparts(src_root);
-fig_dir   = fullfile(proj_root, 'output', 'figures');
+% Si Cfg.OUTPUT_DIR está definido (proyectos en examples/<nombre>/), las
+% figuras se escriben ahí. Si no está definido, se preserva el
+% comportamiento legado: relativo a refactored/ (motor compartido), para
+% no romper specs existentes que no definen este campo.
+if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
+    fig_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+else
+    src_root  = fileparts(mfilename('fullpath'));
+    proj_root = fileparts(src_root);
+    fig_dir   = fullfile(proj_root, 'output', 'figures');
+end
 if ~isfolder(fig_dir)
     mkdir(fig_dir);
 end
