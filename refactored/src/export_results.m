@@ -21,8 +21,12 @@ function export_results(Results, Dataset, Cfg)
 %     SPEC_NAME          string  (default 'spec')
 %     SEED               scalar  (default 0)
 %     MODE               string
+%     OUTPUT_DIR         string (OPCIONAL) — ruta absoluta a la carpeta
+%                        output/ del proyecto que llama (p.ej.
+%                        examples/bnw/output/). Si no está definido, se usa
+%                        el comportamiento legado: refactored/output/.
 %
-%   El archivo se guarda en output/tables/<SPEC_NAME>_results.xlsx
+%   El archivo se guarda en <OUTPUT_DIR o refactored/output>/tables/<SPEC_NAME>_results.xlsx
 
 %% ── Validar entrada mínima ───────────────────────────────────────────────
 if ~isfield(Results, 'LtildeStruct') || isempty(Results.LtildeStruct)
@@ -62,9 +66,17 @@ if isfield(Cfg, 'MODE') && ~isempty(Cfg.MODE)
 end
 
 %% ── Paths ────────────────────────────────────────────────────────────────
-src_root   = fileparts(mfilename('fullpath'));
-proj_root  = fileparts(src_root);
-tables_dir = fullfile(proj_root, 'output', 'tables');
+% Si Cfg.OUTPUT_DIR está definido (proyectos en examples/<nombre>/), los
+% resultados se escriben ahí. Si no está definido, se preserva el
+% comportamiento legado: relativo a refactored/ (motor compartido), para
+% no romper specs existentes que no definen este campo.
+if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
+    tables_dir = fullfile(Cfg.OUTPUT_DIR, 'tables');
+else
+    src_root   = fileparts(mfilename('fullpath'));
+    proj_root  = fileparts(src_root);
+    tables_dir = fullfile(proj_root, 'output', 'tables');
+end
 if ~isfolder(tables_dir), mkdir(tables_dir); end
 
 safe_name = regexprep(spec_name, '[^a-zA-Z0-9_]', '_');
