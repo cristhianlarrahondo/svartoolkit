@@ -1,12 +1,41 @@
 function Dataset = load_data(Cfg)
-%LOAD_DATA  Data loader canonico del SVAR Toolkit.
+%LOAD_DATA  Data loader canonico (generalizado) del SVAR Toolkit.
 %
-%   Dataset = LOAD_DATA(Cfg) lee data_bnw.xlsx (o el archivo especificado
-%   en Cfg.DATA_FILE) y devuelve la struct Dataset.
+%   Dataset = LOAD_DATA(Cfg) lee el archivo especificado en Cfg.DATA_FILE
+%   (o data/data_bnw.xlsx del proyecto si Cfg.DATA_FILE esta vacio) y
+%   devuelve la struct Dataset.
 %
-%   El archivo xlsx debe tener DOS hojas:
-%     Hoja 1: datos tabulares  — col 1 = fecha (DD/MM/AAAA), resto = variables
-%     Hoja 2: metadata         — columnas: var_name | role | label
+%   ESTRUCTURA DEL ARCHIVO XLSX
+%     Hoja "data"      (OBLIGATORIA) — col 1 = fecha (DD/MM/AAAA), resto =
+%                       variables. El nombre de cada columna (excepto la
+%                       primera) se usa como Dataset.var_names.
+%     Hoja "metadata"  (OPCIONAL)    — columnas var_name | label, leidas
+%                       por NOMBRE de columna (no por posicion). Provee
+%                       labels legibles para graficos/tablas, emparejados
+%                       con var_names por NOMBRE (no por posicion).
+%
+%   Las hojas se referencian SIEMPRE por nombre ("data", "metadata"),
+%   nunca por indice/posicion. Si el archivo tiene una hoja adicional
+%   llamada "role" u otras columnas legado dentro de "metadata" (p.ej. una
+%   columna 'role' de versiones anteriores del toolkit), se IGNORAN: los
+%   roles nunca se leen del Excel (ver bloque ROLES abajo).
+%
+%   METADATA PARCIAL:
+%     Si la hoja "metadata" existe, debe cubrir TODAS las variables de la
+%     hoja "data" (todo o nada). Si cubre solo un subconjunto, LOAD_DATA
+%     lanza un error explicito en vez de completar labels silenciosamente.
+%
+%   SIN HOJA "metadata":
+%     Dataset.var_labels = {'var1', 'var2', ...} (defaults posicionales).
+%
+%   ROLES (endogena/exogena):
+%     Los roles NUNCA se leen del Excel. Se definen en el spec via
+%     Cfg.VAR_ROLES (cell array de strings 'endogenous'/'exogenous', mismo
+%     orden y longitud que las columnas de variables en la hoja "data").
+%     DEFAULT (documentado aqui): si Cfg.VAR_ROLES no esta definido o esta
+%     vacio, LOAD_DATA asume que TODAS las variables son 'endogenous'.
+%     Este default reproduce el comportamiento de specs anteriores a esta
+%     version del loader que no conocian Cfg.VAR_ROLES.
 %
 %   FORMATO FECHA OBLIGATORIO:
 %     La columna de fecha debe ser una fecha real de Excel en formato
@@ -23,9 +52,9 @@ function Dataset = load_data(Cfg)
 %     .dates        [T x 1 datetime]      fechas como datetime de MATLAB
 %     .dates_str    {T x 1 cell}          fechas como strings 'MM/YYYY'
 %     .Y_raw        [T x nvar_total]      datos crudos SIN escalar
-%     .var_names    {1 x nvar_total cell} nombres cortos
+%     .var_names    {1 x nvar_total cell} nombres cortos (de la hoja "data")
 %     .var_labels   {1 x nvar_total cell} labels para graficos
-%     .var_roles    {1 x nvar_total cell} 'endogenous' | 'exogenous'
+%     .var_roles    {1 x nvar_total cell} 'endogenous' | 'exogenous' (desde Cfg)
 %     .nvar         scalar                numero de variables endogenas
 %     .nvar_total   scalar                total columnas (sin dummies)
 %     .source_file  string                ruta absoluta al .xlsx leido
@@ -46,12 +75,20 @@ if ~isfile(xlsx_path)
         'Archivo de datos no encontrado: %s', xlsx_path);
 end
 
-%% -- Hoja 1: datos tabulares -------------------------------------------
-opts1 = detectImportOptions(xlsx_path, 'Sheet', 1);
+%% -- Hoja "data" (OBLIGATORIA), referenciada por NOMBRE -----------------
+try
+    opts1 = detectImportOptions(xlsx_path, 'Sheet', 'data');
+catch ME
+    error('load_data:sheetDataMissing', ...
+        ['No se encontro la hoja "data" en %s. Las hojas se referencian ' ...
+         'siempre por nombre (nunca por posicion). Error original de ' ...
+         'MATLAB: %s'], xlsx_path, ME.message);
+end
+
 % Forzar primera columna como datetime
 opts1 = setvaropts(opts1, opts1.VariableNames{1}, 'Type', 'datetime', ...
     'InputFormat', 'dd/MM/yyyy');
-T1 = readtable(xlsx_path, opts1, 'Sheet', 1);
+T1 = readtable(xlsx_path, opts1, 'Sheet', 'data');
 
 % Primera columna = fechas datetime; resto = variables numericas
 dates_raw = T1{:, 1};   % datetime array
@@ -67,44 +104,101 @@ Dataset.dates     = dates_raw;
 Dataset.dates_str = cellstr(datestr(dates_raw, 'mm/yyyy'));
 Dataset.Y_raw     = table2array(T1(:, 2:end));   % [T x nvar_total]
 
-%% -- Detectar frecuencia -----------------------------------------------
-Dataset.freq = p_detect_freq(dates_raw);
+Dataset.var_names = T1.Properties.VariableNames(2:end);
+if ~iscell(Dataset.var_names), Dataset.var_names = cellstr(Dataset.var_names); end
 
-%% -- Hoja 2: metadata --------------------------------------------------
-T2 = readtable(xlsx_path, 'Sheet', 2, 'ReadVariableNames', true);
-
-col_names = lower(T2.Properties.VariableNames);
-idx_name  = find(strcmp(col_names, 'var_name'), 1);
-idx_role  = find(strcmp(col_names, 'role'),     1);
-idx_label = find(strcmp(col_names, 'label'),    1);
-
-if isempty(idx_name) || isempty(idx_role) || isempty(idx_label)
-    error('load_data:metadataCols', ...
-        ['Hoja 2 debe tener columnas var_name, role y label. ' ...
-         'Columnas encontradas: %s'], strjoin(T2.Properties.VariableNames, ', '));
-end
-
-Dataset.var_names  = T2{:, idx_name}';
-Dataset.var_labels = T2{:, idx_label}';
-Dataset.var_roles  = T2{:, idx_role}';
-
-if ~iscell(Dataset.var_names),  Dataset.var_names  = cellstr(Dataset.var_names);  end
-if ~iscell(Dataset.var_labels), Dataset.var_labels = cellstr(Dataset.var_labels); end
-if ~iscell(Dataset.var_roles),  Dataset.var_roles  = cellstr(Dataset.var_roles);  end
-
-%% -- Derivados ---------------------------------------------------------
-endo_mask          = strcmp(Dataset.var_roles, 'endogenous');
-Dataset.nvar       = sum(endo_mask);
-Dataset.nvar_total = size(Dataset.Y_raw, 2);
+nvar_total          = size(Dataset.Y_raw, 2);
+Dataset.nvar_total  = nvar_total;
 Dataset.source_file = xlsx_path;
 
-%% -- Verificacion basica -----------------------------------------------
-if Dataset.nvar_total ~= numel(Dataset.var_names)
-    error('load_data:dimMismatch', ...
-        ['Numero de columnas en Hoja 1 (%d) no coincide con filas de ' ...
-         'metadata en Hoja 2 (%d).'], ...
-        Dataset.nvar_total, numel(Dataset.var_names));
+%% -- Detectar frecuencia -------------------------------------------------
+Dataset.freq = p_detect_freq(dates_raw);
+
+%% -- Hoja "metadata" (OPCIONAL), referenciada por NOMBRE ----------------
+has_metadata = p_sheet_exists(xlsx_path, 'metadata');
+
+if has_metadata
+    T2 = readtable(xlsx_path, 'Sheet', 'metadata', 'ReadVariableNames', true);
+
+    col_names = lower(T2.Properties.VariableNames);
+    idx_name  = find(strcmp(col_names, 'var_name'), 1);
+    idx_label = find(strcmp(col_names, 'label'),    1);
+    % Nota: si existe una columna 'role' (legado), se ignora deliberadamente.
+    % Los roles siempre vienen de Cfg.VAR_ROLES (ver bloque ROLES abajo).
+
+    if isempty(idx_name) || isempty(idx_label)
+        error('load_data:metadataCols', ...
+            ['La hoja "metadata" debe tener (al menos) columnas var_name ' ...
+             'y label. Columnas encontradas: %s'], ...
+            strjoin(T2.Properties.VariableNames, ', '));
+    end
+
+    meta_names  = T2{:, idx_name};
+    meta_labels = T2{:, idx_label};
+    if ~iscell(meta_names),  meta_names  = cellstr(meta_names);  end
+    if ~iscell(meta_labels), meta_labels = cellstr(meta_labels); end
+
+    % Metadata parcial: todo o nada. Primero se verifica el conteo total.
+    if numel(meta_names) ~= nvar_total
+        error('load_data:partialMetadata', ...
+            ['Metadata parcial detectada: la hoja "metadata" define labels ' ...
+             'para %d variable(s), pero la hoja "data" tiene %d columna(s) ' ...
+             'de variables. La metadata debe cubrir TODAS las variables o ' ...
+             'ninguna (no se permiten subconjuntos).'], ...
+            numel(meta_names), nvar_total);
+    end
+
+    % Emparejar por NOMBRE (var_name), no por posicion.
+    var_labels = cell(1, nvar_total);
+    for i = 1:nvar_total
+        j = find(strcmp(meta_names, Dataset.var_names{i}), 1);
+        if isempty(j)
+            error('load_data:partialMetadata', ...
+                ['Metadata parcial detectada: no se encontro un label para ' ...
+                 'la variable "%s" (columna %d de la hoja "data") en la ' ...
+                 'hoja "metadata". La metadata debe cubrir TODAS las ' ...
+                 'variables o ninguna.'], Dataset.var_names{i}, i);
+        end
+        var_labels{i} = meta_labels{j};
+    end
+    Dataset.var_labels = var_labels;
+else
+    Dataset.var_labels = arrayfun(@(k) sprintf('var%d', k), ...
+        1:nvar_total, 'UniformOutput', false);
 end
+
+%% -- Roles: SIEMPRE desde Cfg.VAR_ROLES, NUNCA desde el Excel -----------
+% DEFAULT DOCUMENTADO: si Cfg.VAR_ROLES no esta definido (o esta vacio),
+% TODAS las variables se consideran 'endogenous'. Este es el comportamiento
+% que tenian implicitamente los specs anteriores a esta version del loader.
+if isfield(Cfg, 'VAR_ROLES') && ~isempty(Cfg.VAR_ROLES)
+    var_roles = Cfg.VAR_ROLES;
+    if ~iscell(var_roles), var_roles = cellstr(var_roles); end
+    var_roles = var_roles(:)';
+
+    if numel(var_roles) ~= nvar_total
+        error('load_data:varRolesDim', ...
+            ['Cfg.VAR_ROLES tiene %d elemento(s) pero la hoja "data" tiene ' ...
+             '%d columna(s) de variables. Deben coincidir en numero y ' ...
+             'orden.'], numel(var_roles), nvar_total);
+    end
+
+    valid_roles = {'endogenous', 'exogenous'};
+    is_valid     = ismember(lower(var_roles), valid_roles);
+    if ~all(is_valid)
+        bad_idx = find(~is_valid);
+        error('load_data:varRolesInvalid', ...
+            ['Cfg.VAR_ROLES solo acepta ''endogenous'' o ''exogenous''. ' ...
+             'Valor(es) invalido(s) en posicion(es): %s'], mat2str(bad_idx));
+    end
+
+    Dataset.var_roles = var_roles;
+else
+    Dataset.var_roles = repmat({'endogenous'}, 1, nvar_total);   % DEFAULT
+end
+
+%% -- Derivados -----------------------------------------------------------
+Dataset.nvar = sum(strcmp(Dataset.var_roles, 'endogenous'));
 
 end
 
@@ -129,5 +223,21 @@ elseif delta_days >= 28  && delta_days <= 32
     freq = 'M';   % mensual
 else
     freq = '?';   % desconocida
+end
+end
+
+%% ======================================================================
+%% Funcion auxiliar privada: verificar existencia de una hoja por nombre
+%% ======================================================================
+function tf = p_sheet_exists(xlsx_path, sheet_name)
+%P_SHEET_EXISTS  Verifica si una hoja con el NOMBRE dado existe en el
+%   archivo, sin depender de funciones que no estan disponibles en todas
+%   las versiones de MATLAB (p.ej. sheetnames, introducida en R2020b).
+%   Compatible con MATLAB R2019b+.
+try
+    detectImportOptions(xlsx_path, 'Sheet', sheet_name);
+    tf = true;
+catch
+    tf = false;
 end
 end
