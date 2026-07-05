@@ -2,7 +2,7 @@
 %
 %   CÓMO USAR ESTA PLANTILLA
 %   ─────────────────────────────────────────────────────────────────────
-%   1. Copia esta carpeta template/ completa a examples/mi_caso/
+%   1. Copia esta carpeta template/ completa a projects/mi_caso/
 %   2. Renombra este archivo a spec_<micaso>_pfa.m
 %   3. Edita las secciones marcadas con ← EDITAR
 %   4. Corre pipeline_template.m sección a sección con Ctrl+Enter
@@ -65,17 +65,31 @@ Cfg.SEED           = 0;        % semilla rng (0 = reproducible)
 %  HAY DOS TIPOS DE RESTRICCIONES:
 %
 %  S{k}  →  restricciones de SIGNO sobre el shock k
-%    Cada fila de S{k} selecciona UNA variable y dice si responde
-%    positiva o negativamente al shock k.
-%    Fila  [0 ... 1 ... 0]  →  variable i responde POSITIVAMENTE
-%    Fila  [0 ... -1 ... 0] →  variable i responde NEGATIVAMENTE
-%    (el 1 o -1 está en la posición i; el resto son ceros)
+%    Cada fila de S{k} selecciona UNA variable, UN horizonte, y dice si
+%    responde positiva o negativamente al shock k en ese horizonte.
 %
 %  Z{k}  →  restricciones de CERO sobre el shock k
-%    Cada fila de Z{k} selecciona UNA variable cuya respuesta al shock k
-%    es exactamente 0.
-%    Fila  [0 ... 1 ... 0]  →  variable i tiene respuesta CERO al shock k
-%    (solo aplica en modo IS; en PFA Z debe dejarse vacío)
+%    Cada fila de Z{k} selecciona UNA variable y UN horizonte cuya
+%    respuesta al shock k es exactamente 0.
+%    (solo aplica en modo IS; en PFA Z debe dejarse vacío — ver LIMITACIÓN
+%    DE PFA más abajo)
+%
+%  CÓMO SE CONSTRUYE CADA FILA — build_restriction_row.m
+%  ────────────────────────────────────────────────────────────────────────
+%  En vez de armar las filas a mano con eye(n_vars), usa la función
+%  compartida build_restriction_row.m (vive en refactored/src/), que ya
+%  calcula el offset de columna correcto para cualquier horizonte:
+%
+%    row = build_restriction_row(var_idx, horizon_idx, n_vars, n_horizons, sign_val)
+%
+%      var_idx       índice ordinal de la variable (1..n_vars)
+%      horizon_idx   índice ORDINAL dentro de Cfg.HORIZONS_RESTRICT (NO es
+%                    el valor del horizonte). Si HORIZONS_RESTRICT=[0 1 2],
+%                    horizon_idx=1→h=0, horizon_idx=2→h=1, horizon_idx=3→h=2.
+%      n_vars        número de variables endógenas (Dataset.nvar)
+%      n_horizons    numel(Cfg.HORIZONS_RESTRICT)
+%      sign_val      +1 (positivo) o -1 (negativo) para S; +1 por
+%                    convención para Z (el signo no importa en Z)
 %
 %  HORIZONTE DE LAS RESTRICCIONES
 %  ────────────────────────────────────────────────────────────────────────
@@ -85,55 +99,70 @@ Cfg.SEED           = 0;        % semilla rng (0 = reproducible)
 %    0:3        → en h=0 hasta h=3
 %    0:H        → en todos los horizontes hasta H
 %
-%  IMPORTANTE: S{k} y Z{k} aplican en TODOS los horizontes listados.
-%  Si necesitas distintas restricciones por horizonte (p.ej. signo en h=0
-%  pero no en h=3), debes crear specs separadas.
-%
 %  Ejemplos típicos en la literatura:
 %    Kilian & Murphy (2012)   → HORIZONS_RESTRICT = 0        (solo impacto)
 %    Uhlig (2005)             → HORIZONS_RESTRICT = 0:4      (h=0 a h=4)
 %    Mountford & Uhlig (2009) → HORIZONS_RESTRICT = [0 1 2 3]
 %
-%  CÓMO CONSTRUIR S{k} Y Z{k} PASO A PASO
+%  LIMITACIÓN REAL DE PFA — un solo choque a la vez
 %  ────────────────────────────────────────────────────────────────────────
-%  Supón que tienes n=3 variables: (1) prod, (2) act, (3) price
-%  y quieres identificar el shock de oferta (shock 1, columna 1 de L₀).
+%  PFA (Mountford & Uhlig, 2009) identifica UN ÚNICO choque por corrida:
+%  las restricciones de signo entran como el objetivo a maximizar sobre
+%  un solo vector q, no como filtro sobre varios choques simultáneos.
 %
-%  Restricciones económicas:
-%    "prod responde positivamente al shock de oferta en h=0"
-%    "price responde negativamente al shock de oferta en h=0"
+%  Si esta spec declara Cfg.S{k} no vacío para MÁS DE UN índice k,
+%  run_pfa.m lo detecta automáticamente, emite un warning, y devuelve
+%  Results.skipped = true (Results.skip_reason explica por qué) — NO
+%  falla con un error críptico más adelante. En ese caso usa Cfg.MODE='is'
+%  con la spec IS equivalente, que sí puede resolver múltiples choques
+%  restringidos en la misma corrida.
 %
-%  Traducción a código:
-%    n_vars = 3;
-%    e = eye(n_vars);
-%    S{1} = [ e(1,:)  ];   % prod positivo  → fila con 1 en posición 1
-%    S{1} = [ S{1}; -e(3,:) ];  % price negativo → fila con -1 en posición 3
-%    % Resultado: S{1} = [1 0 0; 0 0 -1]
+%  Cada fila de S{k}/Z{k} debe restringir exactamente UNA variable en UN
+%  horizonte (no se soportan combinaciones lineales de variables en una
+%  sola fila).
+%
+%  ── EJEMPLO 1 — solo impacto (h=0), como Kilian & Murphy (2012) ─────────
+%  Variables: (1)prod, (2)act, (3)price, (4)inv  →  n_vars=4
+%  Shock 1 (oferta): prod responde POSITIVO en h=0, price responde
+%  NEGATIVO en h=0.
+%
+%    n_vars = 4;
+%    Cfg.HORIZONS_RESTRICT = 0;
+%    n_horizons = numel(Cfg.HORIZONS_RESTRICT);   % = 1
+%
+%    Cfg.S    = cell(n_vars, 1);
+%    Cfg.S{1} = [ build_restriction_row(1, 1, n_vars, n_horizons,  1);  ...  % prod+ en h=0
+%                 build_restriction_row(3, 1, n_vars, n_horizons, -1) ];    % price- en h=0
+%
+%  ── EJEMPLO 2 — multi-horizonte real, como Uhlig (2005) ─────────────────
+%  Mismas 4 variables. Shock 1: prod responde POSITIVO en h=0, h=1 y h=2;
+%  price responde NEGATIVO también en h=0, h=1 y h=2.
+%
+%    n_vars = 4;
+%    Cfg.HORIZONS_RESTRICT = [0 1 2];             % 3 horizontes declarados
+%    n_horizons = numel(Cfg.HORIZONS_RESTRICT);   % = 3
+%
+%    Cfg.S    = cell(n_vars, 1);
+%    Cfg.S{1} = [ ...
+%      build_restriction_row(1, 1, n_vars, n_horizons,  1); ...  % prod+ en h=0 (horizon_idx=1)
+%      build_restriction_row(1, 2, n_vars, n_horizons,  1); ...  % prod+ en h=1 (horizon_idx=2)
+%      build_restriction_row(1, 3, n_vars, n_horizons,  1); ...  % prod+ en h=2 (horizon_idx=3)
+%      build_restriction_row(3, 1, n_vars, n_horizons, -1); ...  % price- en h=0
+%      build_restriction_row(3, 2, n_vars, n_horizons, -1); ...  % price- en h=1
+%      build_restriction_row(3, 3, n_vars, n_horizons, -1) ];    % price- en h=2
 %
 %  Para una variable SIN restricción de signo: simplemente no la incluyas.
-%  Para el shock k SIN restricciones: deja S{k} = [] (celda vacía).
-%
-%  ── EJEMPLO COMPLETO: 2 shocks con restricciones distintas ───────────────
-%  Variables: (1)prod, (2)act, (3)price, (4)inv  →  n=4
-%  Shock 1 (oferta):   prod≥0 en h=0, price≤0 en h=0
-%  Shock 2 (demanda):  act≥0 en h=[0,1,2], price≥0 en h=[0,1,2]
-%
-%  n_vars = 4; e = eye(n_vars);
-%  Cfg.HORIZONS_RESTRICT = 0;    % para shock 1
-%  % (nota: HORIZONS_RESTRICT es global; si los shocks tienen horizontes
-%  %  distintos, crea specs separadas)
-%  S{1} = [e(1,:); -e(3,:)];    % prod+, price-
-%  S{2} = [e(2,:);  e(3,:)];    % act+,  price+
-%  Z{1} = [];  Z{2} = [];       % sin zeros en PFA
+%  Para el shock k SIN restricciones: deja Cfg.S{k} = [] (celda vacía).
+%  Ver también build_restriction_row.m para más ejemplos.
 %  ─────────────────────────────────────────────────────────────────────────
 
 % ── Número de variables (ajustar según tu dataset) ──────────────────────
 n_vars = 4;          % ← EDITAR: número de variables endógenas
-e      = eye(n_vars);
 
 % ── Horizonte de las restricciones ──────────────────────────────────────
 Cfg.HORIZONS_RESTRICT = 0;    % ← EDITAR: 0 | [0 1 2] | 0:H
 Cfg.NS  = 1;                  % número de shocks identificados
+n_horizons = numel(Cfg.HORIZONS_RESTRICT);
 
 % ── Restricciones de CERO — vacías en PFA ───────────────────────────────
 Cfg.Z = cell(n_vars, 1);      % todas vacías — no tocar en PFA
@@ -141,17 +170,17 @@ Cfg.Z = cell(n_vars, 1);      % todas vacías — no tocar en PFA
 % ── Restricciones de SIGNO — EDITAR según tu modelo ─────────────────────
 %
 %  Tabla de restricciones (reemplaza con las tuyas):
-%  ┌─────────────┬────────┬────────────┬──────────────────────────────────┐
-%  │ Variable    │ Índice │ Shock      │ Restricción                      │
-%  ├─────────────┼────────┼────────────┼──────────────────────────────────┤
-%  │ var_1       │   1    │ Shock 1    │ POSITIVO en h=0                  │
-%  │ var_3       │   3    │ Shock 1    │ NEGATIVO en h=0                  │
-%  └─────────────┴────────┴────────────┴──────────────────────────────────┘
+%  ┌─────────────┬────────┬────────────┬───────────┬───────────────────────┐
+%  │ Variable    │ Índice │ Shock      │ Horizonte │ Restricción           │
+%  ├─────────────┼────────┼────────────┼───────────┼───────────────────────┤
+%  │ var_1       │   1    │ Shock 1    │   h=0     │ POSITIVO              │
+%  │ var_3       │   3    │ Shock 1    │   h=0     │ NEGATIVO              │
+%  └─────────────┴────────┴────────────┴───────────┴───────────────────────┘
 %
-Cfg.S         = cell(n_vars, 1);
-Cfg.S{1}      = [ e(1,:);    % var_1 responde POSITIVAMENTE al shock 1  ← EDITAR
-                 -e(3,:) ];  % var_3 responde NEGATIVAMENTE al shock 1  ← EDITAR
-% Cfg.S{2}   = [];           % shock 2 sin restricciones (descomentar si aplica)
+Cfg.S    = cell(n_vars, 1);
+Cfg.S{1} = [ build_restriction_row(1, 1, n_vars, n_horizons,  1);  ...  % var_1 POSITIVO en h=0  ← EDITAR
+             build_restriction_row(3, 1, n_vars, n_horizons, -1) ];    % var_3 NEGATIVO en h=0  ← EDITAR
+% Cfg.S{2} = [];    % shock 2 sin restricciones (descomentar si aplica)
 
 % =========================================================================
 %  SECCIÓN 5 — OUTPUT Y VISUALIZACIÓN
