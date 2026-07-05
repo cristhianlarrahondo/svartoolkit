@@ -75,6 +75,12 @@ Cfg.TIMING_VARIANT = [];
 Cfg.DERIV_SIDED    = 2;
 
 % -- OUTPUT ------------------------------------------------------------------
+% Cfg.OUTPUT_DIR — FIX Chat 19 (ítem de máxima prioridad, ausente hasta
+% ahora): sin este campo, plot_irfs.m/plot_fevd.m/export_results.m
+% escribían en el folder legado refactored/output/ compartido entre
+% TODOS los proyectos, en vez de projects/oil_market/output/
+% (autocontenido, como ya hace projects/bnw/).
+Cfg.OUTPUT_DIR     = fullfile(ex_dir, 'output');
 Cfg.SAVE_RESULTS   = false;
 Cfg.PLOT_IRFS      = false;    % false para que validate corra sin figuras
 Cfg.ITER_SHOW      = 100;
@@ -83,4 +89,5 @@ Cfg.ITER_SHOW      = 100;
 Cfg.SUMMARY_HORIZONS = [0 3 6 12 24 36 48 60];
 Cfg.CRED_BANDS       = [0.16 0.84];
 Cfg.SHOCK_IDX        = 1;      % shock de oferta = columna 1
+
 
