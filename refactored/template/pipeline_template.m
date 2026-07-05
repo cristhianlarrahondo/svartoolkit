@@ -199,6 +199,15 @@ for ii = 1:2
         end
     end
     if ~any_zero, fprintf('    (ninguna)\n'); end
+
+    % Matriz de restricciones completa (Chat 19, Hallazgo 2): vista de
+    % conjunto variables x shocks, complementaria a la traduccion fila
+    % por fila de arriba. Ver print_restriction_matrix.m.
+    if exist('Dataset', 'var')
+        print_restriction_matrix(Cfg_show, Dataset);
+    else
+        print_restriction_matrix(Cfg_show);
+    end
 end
 
 fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec y vuelve a correr esta sección.\n\n');
@@ -225,7 +234,7 @@ if ~exist('Dataset', 'var')
 end
 
 fprintf('\n--- Estimación PFA ---\n');
-validate_cfg(Cfg_pfa);   % verifica config antes de correr
+validate_cfg(Cfg_pfa, Dataset);   % verifica config antes de correr (Chat 19: chequeo directo de tamano S/Z vs Dataset.nvar)
 Post_pfa    = build_posterior(Dataset, Cfg_pfa);
 rng(Cfg_pfa.SEED);
 Results_pfa = run_pfa(Post_pfa, Cfg_pfa);
@@ -250,7 +259,7 @@ if ~exist('Dataset', 'var')
 end
 
 fprintf('\n--- Estimación IS ---\n');
-validate_cfg(Cfg_is);
+validate_cfg(Cfg_is, Dataset);   % Chat 19: chequeo directo de tamano S/Z vs Dataset.nvar
 Post_is    = build_posterior(Dataset, Cfg_is);
 rng(Cfg_is.SEED);
 Results_is = run_is(Post_is, Cfg_is);
@@ -265,6 +274,20 @@ Results_is = run_is(Post_is, Cfg_is);
 fprintf('\n════════════════════════════════════════════\n');
 fprintf('  POST-ESTIMACIÓN\n');
 fprintf('════════════════════════════════════════════\n\n');
+
+% ── Recargar SOLO los campos de output (Chat 19, Hallazgo 5 — Opción A) ──
+%
+%  Si editaste la spec DESPUÉS de correr las Secciones 3-4 para cambiar
+%  SUMMARY_HORIZONS, CRED_BANDS, SHOCK_IDX, IRF_TYPE, IRF_NORM u
+%  OUTPUT_DIR (campos que NO afectan el muestreo), puedes volver a correr
+%  esta Sección 5 sola — sin re-estimar — y el cambio SÍ se reflejará.
+%  Ver src/get_output_fields.m para la lista exacta de campos recargados;
+%  todo lo demás (S, Z, NLAG, HORIZON, MODE, ND, SEED, ...) permanece con
+%  el valor que tenía al momento de estimar, coherente con Results_pfa/
+%  Results_is ya calculados. Si editaste un campo de ESTIMACIÓN, sí
+%  necesitas volver a correr las Secciones 3-4 completas.
+Cfg_pfa = refresh_cfg_output(Cfg_pfa, fullfile(PROJ_CFG, [SPEC_PFA '.m']));
+Cfg_is  = refresh_cfg_output(Cfg_is,  fullfile(PROJ_CFG, [SPEC_IS  '.m']));
 
 % ── 5a. Resumen numérico en consola ──────────────────────────────────────
 fprintf('--- IRF Summary (PFA) ---\n');
@@ -344,3 +367,4 @@ function s = format_horizons(H)
         s = ['h=' strjoin(arrayfun(@num2str, H, 'UniformOutput', false), ',')];
     end
 end
+
