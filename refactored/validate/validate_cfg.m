@@ -1,7 +1,19 @@
-function validate_cfg(Cfg)
+function validate_cfg(Cfg, Dataset)
 %VALIDATE_CFG  Valida los campos obligatorios de la struct Cfg.
 %
 %   VALIDATE_CFG(Cfg)
+%   VALIDATE_CFG(Cfg, Dataset)
+%
+%   CAMBIO (Chat 19, Hallazgo 1): Dataset es un argumento OPCIONAL nuevo.
+%   Si se provee, se agrega una validacion DIRECTA de que
+%   numel(Cfg.S) == numel(Cfg.Z) == Dataset.nvar — es decir, que Cfg.S y
+%   Cfg.Z esten dimensionados a cell(n_vars,1), sin importar cuantos
+%   shocks tengan restricciones realmente declaradas. Antes de este chat,
+%   esta funcion solo detectaba el error INDIRECTAMENTE (via el numero de
+%   columnas esperado, inferido de numel(Cfg.S) en lugar del nvar real
+%   del dataset) — lo cual SI atrapaba specs mal construidas, pero con un
+%   mensaje de error menos directo. Sin Dataset, el comportamiento es
+%   identico al de antes (retrocompatible).
 %
 %   Verifica que todos los campos requeridos estén presentes y tengan el
 %   tipo y valor correcto antes de correr cualquier estimación.
@@ -140,6 +152,31 @@ if isfield(Cfg, 'HORIZONS_RESTRICT') && ~isempty(Cfg.S)
     end
 end
 
+%% ── Validación DIRECTA contra Dataset.nvar (Chat 19, Hallazgo 1) ────────
+%  Solo corre si el llamador provee Dataset. Es la version directa del
+%  chequeo de arriba: en vez de inferir nvar de numel(Cfg.S), lo compara
+%  contra el nvar REAL del dataset cargado.
+if nargin >= 2 && ~isempty(Dataset) && isfield(Dataset, 'nvar')
+    if numel(Cfg.S) ~= Dataset.nvar
+        error('validate_cfg:sTamanoIncorrecto', ...
+            ['[validate_cfg] Cfg.S tiene %d celdas, pero el dataset tiene ' ...
+             '%d variables endogenas. REGLA: Cfg.S siempre debe ser ' ...
+             'cell(n_vars, 1) — es decir, cell(%d, 1) — sin importar ' ...
+             'cuantos shocks tengan restricciones realmente declaradas ' ...
+             '(los shocks sin restriccion simplemente quedan con ' ...
+             'Cfg.S{k} = []). Ver README_cfg_reference.md.'], ...
+            numel(Cfg.S), Dataset.nvar, Dataset.nvar);
+    end
+    if numel(Cfg.Z) ~= Dataset.nvar
+        error('validate_cfg:zTamanoIncorrecto', ...
+            ['[validate_cfg] Cfg.Z tiene %d celdas, pero el dataset tiene ' ...
+             '%d variables endogenas. REGLA: Cfg.Z siempre debe ser ' ...
+             'cell(n_vars, 1) — es decir, cell(%d, 1). Ver ' ...
+             'README_cfg_reference.md.'], ...
+            numel(Cfg.Z), Dataset.nvar, Dataset.nvar);
+    end
+end
+
 %% ── Campos adicionales para MODE='is' ───────────────────────────────────
 if strcmpi(Cfg.MODE, 'is')
     is_extra = {'MAX_IS_DRAWS', 'CONJUGATE'};
@@ -167,4 +204,5 @@ fprintf('[validate_cfg] OK — Cfg válida: MODE=''%s'', ND=%g, NLAG=%d, HORIZON
     Cfg.MODE, Cfg.ND, Cfg.NLAG, Cfg.HORIZON);
 
 end
+
 
