@@ -17,6 +17,14 @@ function frac_top = diagnose_is_weights(Results, Cfg)
 %   Salida:
 %     frac_top  fracción del peso total concentrada en top-5% de draws
 
+%% ── Guard: corrida omitida (p.ej. PFA con >1 choque restringido) ────────
+[skip_run, skip_reason] = is_run_skipped(Results);
+if skip_run
+    fprintf('[diagnose_is_weights] Omitido: %s\n', skip_reason);
+    frac_top = NaN;
+    return;
+end
+
 %% ── Validar modo ─────────────────────────────────────────────────────────
 if ~isfield(Results, 'LtildeStruct')
     error('diagnose_is_weights:missingField', ...
@@ -158,3 +166,4 @@ close(fig);
 fprintf('  Histograma guardado en: output/figures/is_weights_%s.png\n\n', spec_name);
 
 end
+
