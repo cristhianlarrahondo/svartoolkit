@@ -14,6 +14,13 @@ function print_summary(LtildeStruct, Dataset, Cfg)
 %
 %   Soporta PFA (3D) e IS (4D) transparentemente vía select_irfs.
 
+%% ── Guard: corrida omitida (p.ej. PFA con >1 choque restringido) ────────
+[skip_run, skip_reason] = is_run_skipped(LtildeStruct);
+if skip_run
+    fprintf('[print_summary] Omitido: %s\n', skip_reason);
+    return;
+end
+
 %% ── Defaults de Cfg ──────────────────────────────────────────────────────
 summary_horizons = [0 4 8 20 40];
 if isfield(Cfg, 'SUMMARY_HORIZONS') && ~isempty(Cfg.SUMMARY_HORIZONS)
@@ -132,3 +139,4 @@ end
 fprintf('\n');
 
 end
+
