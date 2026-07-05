@@ -89,7 +89,15 @@ fs = @(x) ff_h(x, info);             % mapping (A0,A+) -> (B,Sigma,W)
 r  = @(x) ZeroRestrictions(x, info); % restricciones de cero
 
 %% ── Funcion para restricciones de signo ──────────────────────────────────
-fh_S_restrictions = @(y) StructuralRestrictions(y, S);
+% NOTA (fix de este chat): helpfunctions/StructuralRestrictions.m evalua
+% las restricciones de signo unicamente en h=0 (usa inv(A0)' fijo), sin
+% importar cuantos horizontes declare Cfg.HORIZONS_RESTRICT. Con
+% horizons=0 (caso BNW) esto coincidia por construccion, pero con
+% numel(horizons)>1 producia un error de dimensiones. Se usa en su lugar
+% structural_restrictions_generic.m (src/, generalizado via
+% IRF_horizons.m), que reproduce EXACTAMENTE el original cuando
+% horizons=0 y ademas soporta cualquier Cfg.HORIZONS_RESTRICT.
+fh_S_restrictions = @(y) structural_restrictions_generic(y, S, n, p, m, horizons);
 
 %% ── Definiciones de IRFs (pagina 12 de RWZ 2010) ─────────────────────────
 e      = eye(n);
@@ -271,5 +279,6 @@ if accept_rate_final < min_accept
 end
 
 end
+
 
 
