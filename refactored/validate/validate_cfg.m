@@ -11,10 +11,16 @@ function validate_cfg(Cfg)
 %
 %   Campos obligatorios para todos los modos:
 %     MODE, ND, SEED, NLAG, NEX, HORIZON, INDEX_FEVD,
-%     SCALE_FACTOR, DATA_FILE, S, Z
+%     SCALE_FACTOR, DATA_FILE, S, Z, HORIZONS_RESTRICT
 %
 %   Campos adicionales obligatorios para MODE='is':
-%     MAX_IS_DRAWS, CONJUGATE, HORIZONS_RESTRICT
+%     MAX_IS_DRAWS, CONJUGATE
+%
+%   Validacion adicional (todos los modos): cada S{k}/Z{k} no vacio debe
+%   tener numel(Cfg.HORIZONS_RESTRICT)*nvar columnas, donde nvar se infiere
+%   de numel(Cfg.S). Esto detecta specs mal construidas ANTES de correr
+%   run_pfa.m/run_is.m, en vez de fallar mas adelante con un error
+%   criptico de algebra matricial.
 
 %% ── Campos universales (nombre, tipo, escalar?) ──────────────────────────
 %  Columnas: { nombre_campo, tipo, debe_ser_escalar }
@@ -29,7 +35,8 @@ required_fields = { ...
     'SCALE_FACTOR', 'double',  true;  ...
     'DATA_FILE',    'char',    false; ...
     'S',            'cell',    false; ...
-    'Z',            'cell',    false  ...
+    'Z',            'cell',    false; ...
+    'HORIZONS_RESTRICT', 'double', false ...
 };
 
 for k = 1:size(required_fields, 1)
@@ -103,9 +110,39 @@ if Cfg.SCALE_FACTOR <= 0
         '[validate_cfg] Cfg.SCALE_FACTOR debe ser positivo (recibido: %g)', Cfg.SCALE_FACTOR);
 end
 
+%% ── Validar dimensiones de S/Z contra HORIZONS_RESTRICT ─────────────────
+%  Cada S{k}/Z{k} debe tener numel(Cfg.HORIZONS_RESTRICT)*nvar columnas.
+%  nvar se infiere de numel(Cfg.S) (S siempre es cell(nvar,1)).
+%  Este chequeo previene el error críptico de álgebra matricial que
+%  aparecía más adelante (en ZIRF/StructuralRestrictions) cuando una spec
+%  construía S/Z con el número de columnas equivocado para el número de
+%  horizontes declarado.
+if isfield(Cfg, 'HORIZONS_RESTRICT') && ~isempty(Cfg.S)
+    nvar_inferred = numel(Cfg.S);
+    nH            = numel(Cfg.HORIZONS_RESTRICT);
+    expected_cols = nvar_inferred * nH;
+
+    for k = 1:nvar_inferred
+        if ~isempty(Cfg.S{k}) && size(Cfg.S{k}, 2) ~= expected_cols
+            error('validate_cfg:badSDims', ...
+                ['[validate_cfg] Cfg.S{%d} tiene %d columnas; se esperaban %d ' ...
+                 '(numel(Cfg.HORIZONS_RESTRICT)*nvar = %d*%d). Revisa que la ' ...
+                 'fila se haya construido con build_restriction_row.m usando ' ...
+                 'el mismo numel(HORIZONS_RESTRICT) que declara la spec.'], ...
+                k, size(Cfg.S{k},2), expected_cols, nH, nvar_inferred);
+        end
+        if numel(Cfg.Z) >= k && ~isempty(Cfg.Z{k}) && size(Cfg.Z{k}, 2) ~= expected_cols
+            error('validate_cfg:badZDims', ...
+                ['[validate_cfg] Cfg.Z{%d} tiene %d columnas; se esperaban %d ' ...
+                 '(numel(Cfg.HORIZONS_RESTRICT)*nvar = %d*%d).'], ...
+                k, size(Cfg.Z{k},2), expected_cols, nH, nvar_inferred);
+        end
+    end
+end
+
 %% ── Campos adicionales para MODE='is' ───────────────────────────────────
 if strcmpi(Cfg.MODE, 'is')
-    is_extra = {'MAX_IS_DRAWS', 'CONJUGATE', 'HORIZONS_RESTRICT'};
+    is_extra = {'MAX_IS_DRAWS', 'CONJUGATE'};
     for k = 1:numel(is_extra)
         fname = is_extra{k};
         if ~isfield(Cfg, fname)
@@ -130,3 +167,4 @@ fprintf('[validate_cfg] OK — Cfg válida: MODE=''%s'', ND=%g, NLAG=%d, HORIZON
     Cfg.MODE, Cfg.ND, Cfg.NLAG, Cfg.HORIZON);
 
 end
+
