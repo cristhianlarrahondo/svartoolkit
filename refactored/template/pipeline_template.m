@@ -14,9 +14,9 @@
 %     Sección 6 — Export de resultados
 %
 %   ANTES DE EMPEZAR:
-%     1. Copia template/ a examples/mi_caso/
+%     1. Copia template/ a projects/mi_caso/
 %     2. Edita REF_ROOT en la Sección 0 con la ruta absoluta a refactored/
-%     3. Edita EX_NAME con el nombre de tu carpeta de ejemplo
+%     3. Edita PROJ_NAME con el nombre de tu carpeta de proyecto
 %     4. Ajusta spec_template_pfa.m y spec_template_is.m con tu modelo
 
 %% ── Sección 0 — Setup de rutas ───────────────────────────────────────────
@@ -24,35 +24,35 @@
 %  ┌─────────────────────────────────────────────────────────────────────┐
 %  │  EDITAR ESTAS DOS LÍNEAS. Luego Ctrl+Enter aquí y ya no se tocan.  │
 %  └─────────────────────────────────────────────────────────────────────┘
-REF_ROOT = '/ruta/absoluta/a/refactored';   % ← EDITAR (sin barra final)
-EX_NAME  = 'mi_caso';                        % ← EDITAR nombre de tu ejemplo
+REF_ROOT  = '/ruta/absoluta/a/refactored';   % ← EDITAR (sin barra final)
+PROJ_NAME = 'mi_caso';                        % ← EDITAR nombre de tu proyecto
 %  Ejemplos:
-%    REF_ROOT = '/Users/cristhian/repos/svartoolkit/refactored';
-%    EX_NAME  = 'oil_market';
+%    REF_ROOT  = '/Users/cristhian/repos/svartoolkit/refactored';
+%    PROJ_NAME = 'oil_market';
 %
 %  Por qué hardcodeamos la ruta:
 %  mfilename('fullpath') falla cuando se ejecutan secciones %% desde el
 %  Editor de MATLAB (copia el archivo a una carpeta temporal). Al poner
 %  la ruta explícita aquí, Ctrl+Enter funciona sin problema.
 
-EX_ROOT    = fullfile(REF_ROOT, 'examples', EX_NAME);
-EX_CFG     = fullfile(EX_ROOT,  'config');
-EX_DATA    = fullfile(EX_ROOT,  'data');
-OUT_FIG    = fullfile(REF_ROOT, 'output', 'figures');
-OUT_TAB    = fullfile(REF_ROOT, 'output', 'tables');
+PROJ_ROOT  = fullfile(REF_ROOT, 'projects', PROJ_NAME);
+PROJ_CFG   = fullfile(PROJ_ROOT, 'config');
+PROJ_DATA  = fullfile(PROJ_ROOT, 'data');
+OUT_FIG    = fullfile(PROJ_ROOT, 'output', 'figures');   % NUNCA refactored/output/
+OUT_TAB    = fullfile(PROJ_ROOT, 'output', 'tables');    % NUNCA refactored/output/
 
 addpath(fullfile(REF_ROOT, 'src'));
 addpath(fullfile(REF_ROOT, 'config'));
 addpath(fullfile(REF_ROOT, 'helpfunctions'));
 addpath(fullfile(REF_ROOT, 'validate'));
-addpath(EX_CFG);
+addpath(PROJ_CFG);
 
 if ~isfolder(OUT_FIG), mkdir(OUT_FIG); end
 if ~isfolder(OUT_TAB), mkdir(OUT_TAB); end
 
 fprintf('\n[Setup OK]\n');
-fprintf('  REF_ROOT : %s\n', REF_ROOT);
-fprintf('  Ejemplo  : %s\n', EX_NAME);
+fprintf('  REF_ROOT  : %s\n', REF_ROOT);
+fprintf('  PROJ_ROOT : %s\n', PROJ_ROOT);
 fprintf('  Figures  → %s\n', OUT_FIG);
 fprintf('  Tables   → %s\n', OUT_TAB);
 
@@ -64,14 +64,14 @@ fprintf('  Tables   → %s\n', OUT_TAB);
 % Cfg mínima para cargar datos (usa spec_pfa para tener NLAG y SCALE_FACTOR)
 clear Cfg;
 SPEC_PFA = 'spec_template_pfa';   % ← EDITAR: nombre de tu spec PFA
-run(fullfile(EX_CFG, [SPEC_PFA '.m']));
+run(fullfile(PROJ_CFG, [SPEC_PFA '.m']));
 Cfg_eda = Cfg; clear Cfg;
 
 Dataset = load_data(Cfg_eda);
 
 fprintf('\n');
 fprintf('════════════════════════════════════════════\n');
-fprintf('  DATOS: %s\n', EX_NAME);
+fprintf('  DATOS: %s\n', PROJ_NAME);
 fprintf('════════════════════════════════════════════\n');
 fprintf('  Archivo  : %s\n', Cfg_eda.DATA_FILE);
 fprintf('  Frec.    : %s\n', Dataset.freq);
@@ -126,11 +126,11 @@ SPEC_IS  = 'spec_template_is';    % ← EDITAR: nombre de tu spec IS
 
 % Cargar ambas specs
 clear Cfg;
-run(fullfile(EX_CFG, [SPEC_PFA '.m']));
+run(fullfile(PROJ_CFG, [SPEC_PFA '.m']));
 Cfg_pfa = Cfg; clear Cfg;
 
 clear Cfg;
-run(fullfile(EX_CFG, [SPEC_IS '.m']));
+run(fullfile(PROJ_CFG, [SPEC_IS '.m']));
 Cfg_is = Cfg; clear Cfg;
 
 % Imprimir resumen de config
@@ -207,9 +207,16 @@ fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec y vuelve a correr
 %
 %  Corre el algoritmo PFA y guarda Results_pfa en el workspace.
 %  Requiere: Sección 0 ejecutada. Dataset opcional (si no, lo carga).
+%
+%  PFA (Mountford-Uhlig): usa las restricciones de signo (y de cero,
+%  si las hay) declaradas en la spec (Cfg.S/Cfg.Z), para UN SOLO choque.
+%  Si la spec declarara restricciones en más de un choque, PFA no puede
+%  resolverlas simultáneamente — esta sección lo detecta y lo avisa de
+%  inmediato (ver Results_pfa.skipped más abajo), en vez de fallar más
+%  adelante en Post-estimación.
 
 clear Cfg;
-run(fullfile(EX_CFG, [SPEC_PFA '.m']));
+run(fullfile(PROJ_CFG, [SPEC_PFA '.m']));
 Cfg_pfa = Cfg; clear Cfg;
 Cfg_pfa.PLOT_IRFS = false;   % gráficas en Sección 5
 
@@ -223,13 +230,18 @@ Post_pfa    = build_posterior(Dataset, Cfg_pfa);
 rng(Cfg_pfa.SEED);
 Results_pfa = run_pfa(Post_pfa, Cfg_pfa);
 
+if isfield(Results_pfa, 'skipped') && Results_pfa.skipped
+    fprintf('\n[AVISO] PFA fue omitido para esta spec: %s\n', Results_pfa.skip_reason);
+    fprintf('        Continúa a la Sección 4 (IS) — ahí sí se resuelve.\n\n');
+end
+
 %% ── Sección 4 — Estimación IS ────────────────────────────────────────────
 %
 %  Corre el algoritmo IS y guarda Results_is en el workspace.
 %  Requiere: Sección 0 ejecutada. Dataset opcional (si no, lo carga).
 
 clear Cfg;
-run(fullfile(EX_CFG, [SPEC_IS '.m']));
+run(fullfile(PROJ_CFG, [SPEC_IS '.m']));
 Cfg_is = Cfg; clear Cfg;
 Cfg_is.PLOT_IRFS = false;
 
@@ -245,7 +257,9 @@ Results_is = run_is(Post_is, Cfg_is);
 
 %% ── Sección 5 — Post-estimación ──────────────────────────────────────────
 %
-%  IRFs, FEVD, diagnósticos. Gráficas en pantalla + guardadas en output/.
+%  IRFs, FEVD, diagnósticos. Gráficas en pantalla + guardadas en
+%  projects/<tu_caso>/output/ (via Cfg.OUTPUT_DIR si la spec lo define,
+%  o directamente en OUT_FIG/OUT_TAB definidos en la Sección 0).
 %  Requiere: Secciones 3 y 4 ejecutadas.
 
 fprintf('\n════════════════════════════════════════════\n');
@@ -294,7 +308,8 @@ diagnose_is_weights(Results_is, Cfg_is);
 
 %% ── Sección 6 — Export ───────────────────────────────────────────────────
 %
-%  Exporta resultados a Excel en output/tables/.
+%  Exporta resultados a Excel en projects/<tu_caso>/output/tables/
+%  (nunca en refactored/output/).
 %  Requiere: Secciones 3 y 4 ejecutadas.
 
 fprintf('\n--- Export PFA → Excel ---\n');
