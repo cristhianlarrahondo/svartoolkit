@@ -27,6 +27,13 @@ if nargin < 4
     Results = struct();
 end
 
+%% ── Guard: corrida omitida (p.ej. PFA con >1 choque restringido) ────────
+[skip_run, skip_reason] = is_run_skipped(LtildeStruct);
+if skip_run
+    fprintf('[plot_irfs] Omitido: %s\n', skip_reason);
+    return;
+end
+
 %% ── Parámetros de control con defaults ──────────────────────────────────
 irf_type = 'irf';
 if isfield(Cfg, 'IRF_TYPE') && ~isempty(Cfg.IRF_TYPE)
@@ -231,4 +238,5 @@ if ~strcmp(irf_norm, 'none')
 end
 
 end
+
 
