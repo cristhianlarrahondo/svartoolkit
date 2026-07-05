@@ -10,12 +10,21 @@ function export_results(Results, Dataset, Cfg)
 %     4. fevd_summary   — variable | median | pX | pY
 %     5. run_diagnostics — ESS, tasa aceptación, tiempo, nd
 %
+%   CAMBIO (Chat 19, Hallazgo 4): Cfg.SHOCK_IDX ahora acepta escalar,
+%   vector, o 'all'. Antes, pasar un vector hacia que select_irfs.m
+%   lanzara un error de MATLAB ANTES de escribir cualquier hoja — por eso
+%   el archivo .xlsx no se generaba en absoluto (nada que ver con
+%   Cfg.SAVE_RESULTS, que no se usa en esta funcion). Ahora las hojas
+%   irf_summary/cirf_summary contienen una fila por cada combinacion
+%   shock x response x horizon — la columna 'shock' (que ya existia)
+%   distingue los shocks sin necesidad de hojas adicionales.
+%
 %   Nota: irf_summary y cirf_summary exportan TODOS los horizontes (0 a Cfg.HORIZON).
 %   Para tabla de solo horizontes clave usar print_summary con Cfg.SUMMARY_HORIZONS.
 %
 %   Campos de Cfg usados:
 %     CRED_BANDS         (default [0.16 0.84])
-%     SHOCK_IDX          (default LtildeStruct.shock_idx)
+%     SHOCK_IDX          escalar | vector | 'all' (default LtildeStruct.shock_idx)
 %     RESP_IDX           (default todos)
 %     IRF_TYPE           'irf' | 'cirf' | 'both'  (default 'irf')
 %     SPEC_NAME          string  (default 'spec')
@@ -23,7 +32,7 @@ function export_results(Results, Dataset, Cfg)
 %     MODE               string
 %     OUTPUT_DIR         string (OPCIONAL) — ruta absoluta a la carpeta
 %                        output/ del proyecto que llama (p.ej.
-%                        examples/bnw/output/). Si no está definido, se usa
+%                        projects/bnw/output/). Si no está definido, se usa
 %                        el comportamiento legado: refactored/output/.
 %
 %   El archivo se guarda en <OUTPUT_DIR o refactored/output>/tables/<SPEC_NAME>_results.xlsx
@@ -73,10 +82,6 @@ if isfield(Cfg, 'MODE') && ~isempty(Cfg.MODE)
 end
 
 %% ── Paths ────────────────────────────────────────────────────────────────
-% Si Cfg.OUTPUT_DIR está definido (proyectos en examples/<nombre>/), los
-% resultados se escriben ahí. Si no está definido, se preserva el
-% comportamiento legado: relativo a refactored/ (motor compartido), para
-% no romper specs existentes que no definen este campo.
 if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
     tables_dir = fullfile(Cfg.OUTPUT_DIR, 'tables');
 else
@@ -99,9 +104,9 @@ endo_mask  = strcmp(Dataset.var_roles, 'endogenous');
 all_labels = Dataset.var_labels(endo_mask);
 LtildeStruct.var_labels = all_labels;
 
-shock_idx = LtildeStruct.shock_idx;
+shock_idx_req = LtildeStruct.shock_idx;
 if isfield(Cfg, 'SHOCK_IDX') && ~isempty(Cfg.SHOCK_IDX)
-    shock_idx = Cfg.SHOCK_IDX;
+    shock_idx_req = Cfg.SHOCK_IDX;
 end
 
 response_idx = 1:nvar;
@@ -110,9 +115,11 @@ if isfield(Cfg, 'RESP_IDX') && ~isempty(Cfg.RESP_IDX)
     response_idx = ri(ri >= 1 & ri <= nvar);
 end
 
-%% ── Extraer IRFs — todos los horizontes ─────────────────────────────────
-[irfs_raw, label_shock, label_resp] = select_irfs(LtildeStruct, shock_idx, response_idx);
-nresp = numel(response_idx);
+%% ── Extraer IRFs — todos los horizontes, todos los shocks solicitados ───
+[irfs_by_shock, label_shock_arr, label_resp, shock_idx_resolved] = ...
+    select_irfs(LtildeStruct, shock_idx_req, response_idx);
+nresp    = numel(response_idx);
+n_shocks = numel(shock_idx_resolved);
 
 % Todos los horizontes de 0 a horizon_max
 h_all  = 0:horizon_max;          % 0-based
@@ -129,7 +136,7 @@ end
 irf_col_names  = [{'shock', 'response', 'horizon', 'median'}, band_col_names];
 fevd_col_names = [{'variable', 'median'}, band_col_names];
 
-%% ── Helper: construir tabla de IRFs ──────────────────────────────────────
+%% ── Helper: construir tabla de IRFs (un shock) ───────────────────────────
 function rows = build_irf_rows(irfs_arr, label_shock_in, label_resp_in, ...
                                 h_all_in, h_idx_in, nh_in, nresp_in, ...
                                 cred_bands_in, n_bands_in)
@@ -165,8 +172,8 @@ meta_data = {
     'horizon',          num2str(horizon_max);
     'nvar',             num2str(nvar);
     'nlag',             num2str(Cfg.NLAG);
-    'shock_idx',        num2str(shock_idx);
-    'shock_label',      label_shock;
+    'shock_idx',        mat2str(shock_idx_resolved);
+    'shock_labels',     strjoin(label_shock_arr, ', ');
     'variables',        strjoin(all_labels, ', ');
     'irf_type',         irf_type;
     'cred_bands',       mat2str(cred_bands);
@@ -176,12 +183,16 @@ T_meta = cell2table(meta_data, 'VariableNames', {'campo', 'valor'});
 writetable(T_meta, xlsx_path, 'Sheet', 'metadata', 'WriteVariableNames', true);
 
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 2: irf_summary  (todos los horizontes)
+%  HOJA 2: irf_summary  (todos los horizontes, todos los shocks solicitados)
 %% ══════════════════════════════════════════════════════════════════════════
 if ismember(irf_type, {'irf', 'both'})
-    rows_irf = build_irf_rows(irfs_raw, label_shock, label_resp, ...
-                               h_all, h_idx, nh, nresp, cred_bands, n_bands);
-    T_irf = cell2table(rows_irf, 'VariableNames', irf_col_names);
+    rows_irf_all = {};
+    for j = 1:n_shocks
+        rows_j = build_irf_rows(irfs_by_shock{j}, label_shock_arr{j}, label_resp, ...
+                                 h_all, h_idx, nh, nresp, cred_bands, n_bands);
+        rows_irf_all = [rows_irf_all; rows_j]; %#ok<AGROW>
+    end
+    T_irf = cell2table(rows_irf_all, 'VariableNames', irf_col_names);
     writetable(T_irf, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
 else
     T_empty = cell2table({'(IRF_TYPE no incluye irf)'}, 'VariableNames', {'nota'});
@@ -189,13 +200,17 @@ else
 end
 
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 3: cirf_summary  (todos los horizontes)
+%  HOJA 3: cirf_summary  (todos los horizontes, todos los shocks solicitados)
 %% ══════════════════════════════════════════════════════════════════════════
 if ismember(irf_type, {'cirf', 'both'})
-    cirfs_raw = compute_cirfs(irfs_raw);
-    rows_cirf = build_irf_rows(cirfs_raw, label_shock, label_resp, ...
-                                h_all, h_idx, nh, nresp, cred_bands, n_bands);
-    T_cirf = cell2table(rows_cirf, 'VariableNames', irf_col_names);
+    rows_cirf_all = {};
+    for j = 1:n_shocks
+        cirfs_j  = compute_cirfs(irfs_by_shock{j});
+        rows_j   = build_irf_rows(cirfs_j, label_shock_arr{j}, label_resp, ...
+                                   h_all, h_idx, nh, nresp, cred_bands, n_bands);
+        rows_cirf_all = [rows_cirf_all; rows_j]; %#ok<AGROW>
+    end
+    T_cirf = cell2table(rows_cirf_all, 'VariableNames', irf_col_names);
     writetable(T_cirf, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
 else
     T_empty2 = cell2table({'(IRF_TYPE no incluye cirf)'}, 'VariableNames', {'nota'});
@@ -205,6 +220,10 @@ end
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 4: fevd_summary
 %% ══════════════════════════════════════════════════════════════════════════
+% NOTA DE ALCANCE (Chat 19): Results.FEVD refleja el shock identificado
+% por run_pfa/run_is (en IS, siempre la primera columna de Q — ver
+% run_is.m), NO es indexable por Cfg.SHOCK_IDX. Esta hoja no cambia en
+% este chat; el soporte multi-shock de este chat es exclusivo de IRF/CIRF.
 FEVD     = Results.FEVD;
 FEVD_sel = FEVD(response_idx, :);
 
@@ -257,7 +276,7 @@ writetable(T_diag, xlsx_path, 'Sheet', 'run_diagnostics', 'WriteVariableNames', 
 
 fprintf('export_results: archivo guardado en:\n  %s\n', xlsx_path);
 fprintf('  Hojas: metadata | irf_summary | cirf_summary | fevd_summary | run_diagnostics\n');
-fprintf('  IRFs exportados: horizontes 0:%d × %d respuestas\n', horizon_max, nresp);
+fprintf('  IRFs exportados: horizontes 0:%d x %d respuestas x %d shock(s) [%s]\n', ...
+    horizon_max, nresp, n_shocks, num2str(shock_idx_resolved));
 
 end
-
