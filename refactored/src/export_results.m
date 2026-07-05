@@ -28,6 +28,13 @@ function export_results(Results, Dataset, Cfg)
 %
 %   El archivo se guarda en <OUTPUT_DIR o refactored/output>/tables/<SPEC_NAME>_results.xlsx
 
+%% ── Guard: corrida omitida (p.ej. PFA con >1 choque restringido) ────────
+[skip_run, skip_reason] = is_run_skipped(Results);
+if skip_run
+    fprintf('[export_results] Omitido: %s\n', skip_reason);
+    return;
+end
+
 %% ── Validar entrada mínima ───────────────────────────────────────────────
 if ~isfield(Results, 'LtildeStruct') || isempty(Results.LtildeStruct)
     error('export_results:missingLtilde', ...
@@ -253,3 +260,4 @@ fprintf('  Hojas: metadata | irf_summary | cirf_summary | fevd_summary | run_dia
 fprintf('  IRFs exportados: horizontes 0:%d × %d respuestas\n', horizon_max, nresp);
 
 end
+
