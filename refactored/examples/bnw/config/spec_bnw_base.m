@@ -52,16 +52,23 @@ Cfg.SEED = 0;
 %   zero restriction: tfp no responde en h=0
 %   sign restriction: sp (stock prices) > 0 en h=0
 Cfg.HORIZONS_RESTRICT = 0;     % restricciones en horizonte 0
-Cfg.NS = 1;                    % numero de objetos F(theta) con restricciones
+Cfg.NS = 1;                    % vestigial: solo lo usa run_timing.m, no
+                               % run_pfa.m/run_is.m. Se mantiene por
+                               % compatibilidad con specs de timing.
 
-n_vars = 5;
-e_id   = eye(n_vars);
+n_vars     = 5;
+n_horizons = numel(Cfg.HORIZONS_RESTRICT);   % = 1 aqui (solo h=0)
 
+% build_restriction_row(var_idx, horizon_idx, n_vars, n_horizons, sign_val)
+% horizon_idx=1 siempre en este spec porque solo hay un horizonte (h=0)
+% declarado en Cfg.HORIZONS_RESTRICT. Con mas horizontes, horizon_idx
+% seria la posicion ORDINAL dentro de ese vector, no el valor del horizonte
+% (ver build_restriction_row.m para el ejemplo multi-horizonte).
 Cfg.Z    = cell(n_vars, 1);
-Cfg.Z{1} = e_id(1,:);          % Z_1 = e_1': tfp igual a cero en h=0
+Cfg.Z{1} = build_restriction_row(1, 1, n_vars, n_horizons, 1);   % tfp = 0 en h=0
 
 Cfg.S    = cell(n_vars, 1);
-Cfg.S{1} = e_id(2,:);          % S_1 = e_2': sp positivo en h=0
+Cfg.S{1} = build_restriction_row(2, 1, n_vars, n_horizons, 1);   % sp positivo en h=0
 
 % -- TIMING (no aplica en PFA/IS) ------------------------------------------
 Cfg.TIMING_VARIANT = [];
@@ -75,3 +82,4 @@ Cfg.CRED_BANDS       = [0.16 0.84];
 Cfg.SHOCK_IDX        = 1;
 Cfg.IRF_TYPE         = 'irf';
 Cfg.IRF_NORM         = 'none';
+
