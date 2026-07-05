@@ -59,6 +59,16 @@ Abre `spec_micaso_pfa.m` y edita las secciones marcadas con `← EDITAR`:
 
 #### Cómo declarar restricciones
 
+> **REGLA (Chat 19) — LEE ESTO PRIMERO:** `Cfg.S` y `Cfg.Z` **siempre** se
+> dimensionan a `cell(n_vars, 1)`, sin importar cuántos shocks tengan
+> restricciones realmente declaradas. Con 6 variables y 4 shocks de
+> interés, sigue siendo `cell(6, 1)`, **no** `cell(4, 1)`. Los shocks sin
+> restricción simplemente quedan con `Cfg.S{k} = []`. Esto lo exigen
+> internamente `SetupInfo.m`, `run_pfa.m`, `run_is.m` y
+> `structural_restrictions_generic.m` (todos indexan `1:n_vars`). Si usas
+> `cell(n_shocks,1)`, obtendrás un error de dimensiones al estimar.
+> Ver `README_cfg_reference.md` para la referencia completa de campos.
+
 Las variables tienen **índices numéricos** según el orden en la hoja `varinfo`:
 - var_1 = primera fila de varinfo
 - var_2 = segunda fila
@@ -174,9 +184,21 @@ Abre `pipeline_micaso.m` en el Editor de MATLAB y ejecuta con **Ctrl+Enter**:
 
 > **Para producción** (resultados finales): en las Secciones 3 y 4, cambia `Cfg_pfa.ND = 5000` antes de correr.
 
+> **Editar solo un parámetro de gráfica** (Chat 19): si después de estimar
+> quieres cambiar `SHOCK_IDX`, `CRED_BANDS`, `SUMMARY_HORIZONS`, `IRF_TYPE`,
+> `IRF_NORM` u `OUTPUT_DIR`, edita la spec y vuelve a correr **solo la
+> Sección 5** — el pipeline recarga esos campos automáticamente
+> (`refresh_cfg_output.m`) sin necesidad de re-estimar. Si en cambio
+> cambias algo que sí afecta el muestreo (`S`, `Z`, `NLAG`, `HORIZON`,
+> `MODE`, `ND`, `SEED`, ...), sí necesitas re-correr las Secciones 3–4.
+
 ---
 
 ## Referencia rápida de campos Cfg
+
+> Esta es una referencia RÁPIDA. Para la lista completa de TODOS los
+> campos Cfg (tipo, valores válidos, default, efecto, dónde se usan),
+> ver **`README_cfg_reference.md`**.
 
 | Campo | Descripción | Típico |
 |---|---|---|
@@ -189,11 +211,12 @@ Abre `pipeline_micaso.m` en el Editor de MATLAB y ejecuta con **Ctrl+Enter**:
 | `ND` | Draws (testing: 500, prod: 5000+) | `500` |
 | `SEED` | Semilla aleatoria | `0` |
 | `HORIZONS_RESTRICT` | Horizontes de las restricciones | `0` |
-| `S{k}` | Sign restrictions sobre shock k (vía `build_restriction_row`) | ver arriba |
-| `Z{k}` | Zero restrictions sobre shock k (solo IS, vía `build_restriction_row`) | ver arriba |
-| `SHOCK_IDX` | Índice del shock identificado | `1` |
+| `S{k}` | Sign restrictions sobre shock k (vía `build_restriction_row`). **`S` siempre es `cell(n_vars,1)`** — ver regla arriba | ver arriba |
+| `Z{k}` | Zero restrictions sobre shock k (solo IS, vía `build_restriction_row`). **`Z` siempre es `cell(n_vars,1)`** | ver arriba |
+| `SHOCK_IDX` | Shock(s) identificado(s) a graficar/exportar | escalar \| vector \| `'all'` (soporta varios desde Chat 19) |
 | `CRED_BANDS` | Bandas de credibilidad | `[0.16 0.84]` |
 | `SUMMARY_HORIZONS` | Horizontes para tabla consola | `[0 1 4 8 12 20]` |
+| `OUTPUT_DIR` | Carpeta de salida del proyecto (figuras/tablas) | `fullfile(ex_dir, 'output')` — **siempre defínelo**, o las figuras/tablas caen en el folder legado compartido `refactored/output/` |
 
 ---
 
@@ -202,5 +225,9 @@ Abre `pipeline_micaso.m` en el Editor de MATLAB y ejecuta con **Ctrl+Enter**:
 - `projects/oil_market/pipeline_oil.m` — ejemplo con datos reales (pausado, ver su README)
 - `projects/bnw/pipeline_bnw.m` — ejemplo de referencia completo (BNW 2018), con `build_restriction_row` y aviso de `Results.skipped`
 - `src/build_restriction_row.m` — documentación completa de la convención de columnas
+- `src/print_restriction_matrix.m` — vista de conjunto variables x shocks de tus restricciones (Chat 19)
 - `src/load_data.m` — documentación del formato de datos
 - `validate/validate_cfg.m` — validación automática de la config antes de estimar
+- `README_cfg_reference.md` — referencia completa de TODOS los campos Cfg (Chat 19)
+- `src/get_output_fields.m` / `src/refresh_cfg_output.m` — permite editar parámetros de gráfica/exportación (SHOCK_IDX, CRED_BANDS, SUMMARY_HORIZONS, IRF_TYPE, IRF_NORM, OUTPUT_DIR) y re-correr la Sección 5 del pipeline SIN volver a estimar (Chat 19)
+
