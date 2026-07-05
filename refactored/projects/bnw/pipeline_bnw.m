@@ -175,6 +175,11 @@ for ii = 1:2
         end
     end
     if ~any_z, fprintf('    (ninguna)\n'); end
+
+    % Matriz de restricciones completa (Chat 19, Hallazgo 2): vista de
+    % conjunto variables x shocks, complementaria a la traduccion fila
+    % por fila de arriba.
+    print_restriction_matrix(Cfg_show, Dataset);
 end
 
 fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec y vuelve a correr esta sección.\n\n');
@@ -198,7 +203,7 @@ if ~exist('Dataset', 'var')
 end
 
 fprintf('\n--- Estimación PFA (nd=%d) ---\n', Cfg_pfa.ND);
-validate_cfg(Cfg_pfa);
+validate_cfg(Cfg_pfa, Dataset);   % Chat 19: chequeo directo de tamano S/Z vs Dataset.nvar
 Post_pfa    = build_posterior(Dataset, Cfg_pfa);
 rng(Cfg_pfa.SEED);
 Results_pfa = run_pfa(Post_pfa, Cfg_pfa);
@@ -222,7 +227,7 @@ if ~exist('Dataset', 'var')
 end
 
 fprintf('\n--- Estimación IS (nd=%d) ---\n', Cfg_is.ND);
-validate_cfg(Cfg_is);
+validate_cfg(Cfg_is, Dataset);   % Chat 19: chequeo directo de tamano S/Z vs Dataset.nvar
 Post_is    = build_posterior(Dataset, Cfg_is);
 rng(Cfg_is.SEED);
 Results_is = run_is(Post_is, Cfg_is);
@@ -236,6 +241,13 @@ Results_is = run_is(Post_is, Cfg_is);
 fprintf('\n════════════════════════════════════════════\n');
 fprintf('  POST-ESTIMACIÓN\n');
 fprintf('════════════════════════════════════════════\n\n');
+
+% ── Recargar SOLO los campos de output (Chat 19, Hallazgo 5 — Opción A) ──
+%  Permite editar SUMMARY_HORIZONS, CRED_BANDS, SHOCK_IDX, IRF_TYPE,
+%  IRF_NORM u OUTPUT_DIR en spec_bnw_pfa.m/spec_bnw_is.m y volver a correr
+%  esta Sección 5 sola — sin re-estimar. Ver src/get_output_fields.m.
+Cfg_pfa = refresh_cfg_output(Cfg_pfa, fullfile(PROJ_CFG, 'spec_bnw_pfa.m'));
+Cfg_is  = refresh_cfg_output(Cfg_is,  fullfile(PROJ_CFG, 'spec_bnw_is.m'));
 
 % 5a. Resumen numérico
 fprintf('--- IRF Summary (PFA) ---\n');
@@ -302,5 +314,6 @@ function s = format_horizons_bnw(H)
         s = ['h=' strjoin(arrayfun(@num2str, H(:)', 'UniformOutput', false), ',')];
     end
 end
+
 
 
