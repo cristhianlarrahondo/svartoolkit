@@ -4,20 +4,24 @@ function export_results(Results, Dataset, Cfg)
 %   EXPORT_RESULTS(Results, Dataset, Cfg)
 %
 %   Genera un archivo .xlsx con las siguientes hojas:
-%     1. metadata       — spec, fecha, variables, modo, semilla
-%     2. irf_summary    — shock × response × horizon (0:HORIZON) | median | pX | pY
-%     3. cirf_summary   — ídem para CIRFs (solo si IRF_TYPE incluye 'cirf')
-%     4. fevd_summary   — variable | median | pX | pY
-%     5. run_diagnostics — ESS, tasa aceptación, tiempo, nd
+%     1. metadata            — spec, fecha, variables, modo, semilla
+%     2. irf_summary[_s<k>]  — UNA HOJA POR CADA SHOCK solicitado (shock x
+%                              response x horizon (0:HORIZON) | median | pX | pY).
+%                              Con un solo shock: 'irf_summary' (sin sufijo,
+%                              igual que antes de este chat). Con varios:
+%                              'irf_summary_s<k>' por cada shock k.
+%     3. cirf_summary[_s<k>] — idem para CIRFs (solo si IRF_TYPE incluye 'cirf')
+%     4. fevd_summary        — variable | median | pX | pY
+%     5. run_diagnostics     — ESS, tasa aceptacion, tiempo, nd
 %
 %   CAMBIO (Chat 19, Hallazgo 4): Cfg.SHOCK_IDX ahora acepta escalar,
 %   vector, o 'all'. Antes, pasar un vector hacia que select_irfs.m
 %   lanzara un error de MATLAB ANTES de escribir cualquier hoja — por eso
 %   el archivo .xlsx no se generaba en absoluto (nada que ver con
-%   Cfg.SAVE_RESULTS, que no se usa en esta funcion). Ahora las hojas
-%   irf_summary/cirf_summary contienen una fila por cada combinacion
-%   shock x response x horizon — la columna 'shock' (que ya existia)
-%   distingue los shocks sin necesidad de hojas adicionales.
+%   Cfg.SAVE_RESULTS, que no se usa en esta funcion). Ahora se genera UNA
+%   HOJA POR CADA SHOCK solicitado (tal como se aprobo originalmente) en
+%   vez de consolidar todos los shocks en una sola hoja con columna
+%   'shock' repetida.
 %
 %   Nota: irf_summary y cirf_summary exportan TODOS los horizontes (0 a Cfg.HORIZON).
 %   Para tabla de solo horizontes clave usar print_summary con Cfg.SUMMARY_HORIZONS.
@@ -163,6 +167,21 @@ end
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 1: metadata
 %% ══════════════════════════════════════════════════════════════════════════
+% Precomputar los nombres de hoja que se van a generar (una por shock),
+% solo para documentarlos en la hoja de metadata.
+irf_sheet_names_preview  = cell(1, n_shocks);
+cirf_sheet_names_preview = cell(1, n_shocks);
+for j = 1:n_shocks
+    sidx_j = shock_idx_resolved(j);
+    if n_shocks == 1
+        irf_sheet_names_preview{j}  = 'irf_summary';
+        cirf_sheet_names_preview{j} = 'cirf_summary';
+    else
+        irf_sheet_names_preview{j}  = sprintf('irf_summary_s%d', sidx_j);
+        cirf_sheet_names_preview{j} = sprintf('cirf_summary_s%d', sidx_j);
+    end
+end
+
 meta_data = {
     'spec_name',        spec_name;
     'fecha_run',        datestr(now, 'yyyy-mm-dd HH:MM:SS');
@@ -178,43 +197,66 @@ meta_data = {
     'irf_type',         irf_type;
     'cred_bands',       mat2str(cred_bands);
     'horizons_export',  sprintf('0:%d (todos)', horizon_max);
+    'hojas_irf',        strjoin(irf_sheet_names_preview, ', ');
+    'hojas_cirf',       strjoin(cirf_sheet_names_preview, ', ');
 };
 T_meta = cell2table(meta_data, 'VariableNames', {'campo', 'valor'});
 writetable(T_meta, xlsx_path, 'Sheet', 'metadata', 'WriteVariableNames', true);
 
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 2: irf_summary  (todos los horizontes, todos los shocks solicitados)
+%  HOJA 2: irf_summary — UNA HOJA POR CHOQUE (Chat 19, Hallazgo 4: "una
+%  figura/hoja por choque", tal como se aprobó — no se consolidan los
+%  shocks en una sola hoja).
+%
+%  Con un solo shock solicitado (caso mas comun, y el unico que existia
+%  antes de este chat): nombre de hoja SIN sufijo ('irf_summary'), igual
+%  que antes — no rompe archivos/flujos existentes.
+%  Con varios shocks: 'irf_summary_s<k>' por cada shock k solicitado.
 %% ══════════════════════════════════════════════════════════════════════════
+irf_sheet_names = cell(1, n_shocks);
 if ismember(irf_type, {'irf', 'both'})
-    rows_irf_all = {};
     for j = 1:n_shocks
+        sidx_j = shock_idx_resolved(j);
         rows_j = build_irf_rows(irfs_by_shock{j}, label_shock_arr{j}, label_resp, ...
                                  h_all, h_idx, nh, nresp, cred_bands, n_bands);
-        rows_irf_all = [rows_irf_all; rows_j]; %#ok<AGROW>
+        T_irf_j = cell2table(rows_j, 'VariableNames', irf_col_names);
+        if n_shocks == 1
+            sheet_name = 'irf_summary';
+        else
+            sheet_name = sprintf('irf_summary_s%d', sidx_j);
+        end
+        irf_sheet_names{j} = sheet_name;
+        writetable(T_irf_j, xlsx_path, 'Sheet', sheet_name, 'WriteVariableNames', true);
     end
-    T_irf = cell2table(rows_irf_all, 'VariableNames', irf_col_names);
-    writetable(T_irf, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
 else
     T_empty = cell2table({'(IRF_TYPE no incluye irf)'}, 'VariableNames', {'nota'});
     writetable(T_empty, xlsx_path, 'Sheet', 'irf_summary', 'WriteVariableNames', true);
+    irf_sheet_names = {'irf_summary'};
 end
 
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 3: cirf_summary  (todos los horizontes, todos los shocks solicitados)
+%  HOJA 3: cirf_summary — UNA HOJA POR CHOQUE (mismo criterio que HOJA 2)
 %% ══════════════════════════════════════════════════════════════════════════
+cirf_sheet_names = cell(1, n_shocks);
 if ismember(irf_type, {'cirf', 'both'})
-    rows_cirf_all = {};
     for j = 1:n_shocks
-        cirfs_j  = compute_cirfs(irfs_by_shock{j});
-        rows_j   = build_irf_rows(cirfs_j, label_shock_arr{j}, label_resp, ...
-                                   h_all, h_idx, nh, nresp, cred_bands, n_bands);
-        rows_cirf_all = [rows_cirf_all; rows_j]; %#ok<AGROW>
+        sidx_j  = shock_idx_resolved(j);
+        cirfs_j = compute_cirfs(irfs_by_shock{j});
+        rows_j  = build_irf_rows(cirfs_j, label_shock_arr{j}, label_resp, ...
+                                  h_all, h_idx, nh, nresp, cred_bands, n_bands);
+        T_cirf_j = cell2table(rows_j, 'VariableNames', irf_col_names);
+        if n_shocks == 1
+            sheet_name = 'cirf_summary';
+        else
+            sheet_name = sprintf('cirf_summary_s%d', sidx_j);
+        end
+        cirf_sheet_names{j} = sheet_name;
+        writetable(T_cirf_j, xlsx_path, 'Sheet', sheet_name, 'WriteVariableNames', true);
     end
-    T_cirf = cell2table(rows_cirf_all, 'VariableNames', irf_col_names);
-    writetable(T_cirf, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
 else
     T_empty2 = cell2table({'(IRF_TYPE no incluye cirf)'}, 'VariableNames', {'nota'});
     writetable(T_empty2, xlsx_path, 'Sheet', 'cirf_summary', 'WriteVariableNames', true);
+    cirf_sheet_names = {'cirf_summary'};
 end
 
 %% ══════════════════════════════════════════════════════════════════════════
@@ -275,7 +317,8 @@ T_diag = cell2table(diag_data, 'VariableNames', {'metrica', 'valor'});
 writetable(T_diag, xlsx_path, 'Sheet', 'run_diagnostics', 'WriteVariableNames', true);
 
 fprintf('export_results: archivo guardado en:\n  %s\n', xlsx_path);
-fprintf('  Hojas: metadata | irf_summary | cirf_summary | fevd_summary | run_diagnostics\n');
+fprintf('  Hojas: metadata | %s | %s | fevd_summary | run_diagnostics\n', ...
+    strjoin(irf_sheet_names, ' | '), strjoin(cirf_sheet_names, ' | '));
 fprintf('  IRFs exportados: horizontes 0:%d x %d respuestas x %d shock(s) [%s]\n', ...
     horizon_max, nresp, n_shocks, num2str(shock_idx_resolved));
 
