@@ -59,6 +59,18 @@ Cfg.SEED           = 0;
 %  No hay guard de "un solo choque" en run_is.m — esa limitación es
 %  exclusiva de PFA.
 %
+%  ┌───────────────────────────────────────────────────────────────────┐
+%  │ REGLA (Chat 19, Hallazgo 1) — LEE ESTO ANTES DE EDITAR:              │
+%  │   Cfg.S y Cfg.Z SIEMPRE se dimensionan a cell(n_vars, 1), sin       │
+%  │   importar cuantos shocks tengan restricciones realmente           │
+%  │   declaradas. NO uses cell(n_shocks_identificados, 1) — con 6      │
+%  │   variables y 4 shocks de interes, sigue siendo cell(6, 1), NO     │
+%  │   cell(4, 1). Los shocks sin restriccion simplemente quedan con    │
+%  │   Cfg.S{k}/Cfg.Z{k} = [] (celda vacia). Lo exigen internamente     │
+%  │   SetupInfo.m, run_pfa.m, run_is.m y                               │
+%  │   structural_restrictions_generic.m, todos indexando 1:n_vars.     │
+%  └───────────────────────────────────────────────────────────────────┘
+%
 %  CÓMO SE CONSTRUYE CADA FILA — build_restriction_row.m
 %  ────────────────────────────────────────────────────────────────────────
 %  Usa la función compartida build_restriction_row.m (vive en
@@ -165,16 +177,25 @@ Cfg.S{1} = [ build_restriction_row(1, 1, n_vars, n_horizons,  1); ...  % var_1 P
 % =========================================================================
 %  SECCIÓN 5 — OUTPUT Y VISUALIZACIÓN
 % =========================================================================
+% Cfg.OUTPUT_DIR — FIX Chat 19 (antes ausente en esta plantilla): sin este
+% campo, plot_irfs.m/plot_fevd.m/export_results.m escriben en el folder
+% legado refactored/output/ compartido entre TODOS los proyectos, en vez
+% de projects/mi_caso/output/ (autocontenido). Siempre defínelo así:
+cfg_dir_out   = fileparts(mfilename('fullpath'));   % .../mi_caso/config/
+proj_root_out = fileparts(cfg_dir_out);             % .../mi_caso/
+Cfg.OUTPUT_DIR = fullfile(proj_root_out, 'output'); % ← NO EDITAR (siempre relativo)
+
 Cfg.SPEC_NAME        = 'spec_template_is';  % ← EDITAR
 Cfg.SAVE_RESULTS     = false;
 Cfg.PLOT_IRFS        = false;
 Cfg.ITER_SHOW        = 100;
 Cfg.SUMMARY_HORIZONS = [0 1 4 8 12 20];    % ← EDITAR
 Cfg.CRED_BANDS       = [0.16 0.84];
-Cfg.SHOCK_IDX        = 1;
+Cfg.SHOCK_IDX        = 1;               % escalar | vector | 'all' (Chat 19: ya soporta varios shocks)
 Cfg.IRF_TYPE         = 'irf';
 Cfg.IRF_NORM         = 'none';
 Cfg.MIN_ACCEPT_RATE  = 0.05;  % alerta si tasa de aceptación IS < este umbral
 
 Cfg.TIMING_VARIANT   = [];
 Cfg.DERIV_SIDED      = 2;
+
