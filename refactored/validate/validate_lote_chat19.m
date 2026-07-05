@@ -228,13 +228,14 @@ ok_d7 = true;
 try
     export_results(Results_is, Dataset, Cfg_exp);
     xlsx_test = fullfile(Cfg_exp.OUTPUT_DIR, 'tables', 'validate_chat19_export_test_results.xlsx');
-    T_check = readtable(xlsx_test, 'Sheet', 'irf_summary');
-    n_shocks_in_sheet = numel(unique(T_check.shock));
+    sheet_info = sheetnames(xlsx_test);
+    irf_sheets_found = sheet_info(startsWith(sheet_info, 'irf_summary_s'));
+    n_shocks_in_file = numel(irf_sheets_found);   % nvar=5 -> se esperan 5 hojas irf_summary_s1..s5
 catch
-    ok_d7 = false; n_shocks_in_sheet = 0;
+    ok_d7 = false; n_shocks_in_file = 0;
 end
-n_results(end+1) = check('D7: export_results con SHOCK_IDX=''all'' produce >=2 shocks distintos en irf_summary', ...
-    ok_d7 && n_shocks_in_sheet >= 2, sprintf('n_shocks_in_sheet=%d, ok=%d', n_shocks_in_sheet, ok_d7));
+n_results(end+1) = check('D7: export_results con SHOCK_IDX=''all'' genera una hoja irf_summary_s<k> POR CADA shock (>=2)', ...
+    ok_d7 && n_shocks_in_file >= 2, sprintf('n_shocks_in_file=%d, ok=%d', n_shocks_in_file, ok_d7));
 
 Cfg_ps = Cfg_is;
 Cfg_ps.SHOCK_IDX = [1 2];
