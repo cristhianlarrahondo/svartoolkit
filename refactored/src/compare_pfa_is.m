@@ -19,6 +19,14 @@ function compare_pfa_is(Results_pfa, Results_is, Dataset, Cfg)
 %     Dataset       struct de load_data.m (para var_labels y var_roles)
 %     Cfg           struct de configuración
 
+%% ── Guard: corrida PFA omitida (p.ej. >1 choque restringido) ─────────────
+[skip_run, skip_reason] = is_run_skipped(Results_pfa);
+if skip_run
+    fprintf('[compare_pfa_is] Omitido: %s\n', skip_reason);
+    fprintf('[compare_pfa_is] No hay PFA con qué comparar. Revisa Results_is directamente.\n');
+    return;
+end
+
 %% ── Validar entradas ─────────────────────────────────────────────────────
 if ~isfield(Results_pfa, 'LtildeStruct') || ~strcmpi(Results_pfa.LtildeStruct.mode, 'pfa')
     error('compare_pfa_is:badPFA', ...
@@ -205,3 +213,4 @@ writetable(T, out_path, 'Sheet', 'compare_pfa_is');
 fprintf('  Tabla exportada a: output/tables/compare_pfa_is_%s.xlsx\n\n', spec_name);
 
 end
+
