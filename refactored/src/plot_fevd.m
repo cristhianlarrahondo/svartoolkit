@@ -178,9 +178,17 @@ legend(ax, [h_shock, h_rest, h_ci], ...
 set(hFig, 'PaperPositionMode', 'auto');
 
 %% ── Guardar figura ───────────────────────────────────────────────────────
-src_root  = fileparts(mfilename('fullpath'));
-proj_root = fileparts(src_root);
-fig_dir   = fullfile(proj_root, 'output', 'figures');
+% FIX (Chat 19, Hallazgo 4): esta funcion ignoraba Cfg.OUTPUT_DIR por
+% completo (a diferencia de plot_irfs.m y export_results.m, que ya lo
+% respetaban desde el Chat 18) — siempre escribia en refactored/output/,
+% incluso para proyectos con su propio OUTPUT_DIR definido.
+if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
+    fig_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+else
+    src_root  = fileparts(mfilename('fullpath'));
+    proj_root = fileparts(src_root);
+    fig_dir   = fullfile(proj_root, 'output', 'figures');
+end
 if ~isfolder(fig_dir), mkdir(fig_dir); end
 
 fname = fullfile(fig_dir, ['fevd_', mode_str, fig_suffix, '.png']);
@@ -188,3 +196,4 @@ print(fname, '-dpng', '-r150');
 fprintf('Figura FEVD guardada en: %s\n', fname);
 
 end
+
