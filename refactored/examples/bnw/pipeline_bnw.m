@@ -181,7 +181,12 @@ fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec y vuelve a correr
 
 %% ── Sección 3 — Estimación PFA ───────────────────────────────────────────
 %
-%  PFA: sign restrictions únicamente (zero restrictions se ignoran en PFA).
+%  PFA (Mountford-Uhlig): usa las restricciones de signo Y de cero
+%  declaradas en la spec (Cfg.S/Cfg.Z), para UN SOLO choque. Si la spec
+%  declarara restricciones en más de un choque, PFA no puede resolverlas
+%  simultáneamente — esta sección lo detecta y lo avisa de inmediato
+%  (ver Results_pfa.skipped más abajo), en vez de fallar más adelante en
+%  Post-estimación.
 
 clear Cfg;
 run(fullfile(PROJ_CFG, 'spec_bnw_pfa.m'));
@@ -197,6 +202,11 @@ validate_cfg(Cfg_pfa);
 Post_pfa    = build_posterior(Dataset, Cfg_pfa);
 rng(Cfg_pfa.SEED);
 Results_pfa = run_pfa(Post_pfa, Cfg_pfa);
+
+if isfield(Results_pfa, 'skipped') && Results_pfa.skipped
+    fprintf('\n[AVISO] PFA fue omitido para esta spec: %s\n', Results_pfa.skip_reason);
+    fprintf('        Continúa a la Sección 4 (IS) — ahí sí se resuelve.\n\n');
+end
 
 %% ── Sección 4 — Estimación IS ────────────────────────────────────────────
 %
@@ -292,3 +302,4 @@ function s = format_horizons_bnw(H)
         s = ['h=' strjoin(arrayfun(@num2str, H(:)', 'UniformOutput', false), ',')];
     end
 end
+
