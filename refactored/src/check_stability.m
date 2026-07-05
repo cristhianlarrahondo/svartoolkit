@@ -17,6 +17,14 @@ function frac_stable = check_stability(Results, Cfg)
 %   Salida:
 %     frac_stable  escalar en [0,1]: fracción de draws estables
 
+%% ── Guard: corrida omitida (p.ej. PFA con >1 choque restringido) ────────
+[skip_run, skip_reason] = is_run_skipped(Results);
+if skip_run
+    fprintf('[check_stability] Omitido: %s\n', skip_reason);
+    frac_stable = NaN;
+    return;
+end
+
 %% ── Validar campos requeridos ────────────────────────────────────────────
 required = {'Bdraws', 'Sigmadraws', 'LtildeStruct'};
 for ii = 1:numel(required)
@@ -133,3 +141,4 @@ end
 fprintf('%s\n\n', sep);
 
 end
+
