@@ -239,12 +239,17 @@ for j = 1:n_shocks
         [irf_med, irf_blo, irf_bhi] = calc_stats(irfs_norm_arr);
 
         hFig1 = figure('Name', sprintf('IRF - %s', label_shock), 'NumberTitle', 'off');
-        set(hFig1, 'Position', [0 20 180*n_cols 200*n_rows]);
+        set(hFig1, 'Position', [0 20 220*n_cols 220*n_rows]);
+        % tiledlayout (en vez de subplot fijo) reserva automaticamente el
+        % espacio del titulo general y el espaciado entre filas/columnas —
+        % evita el overlap entre el titulo general y los paneles/labels
+        % que ocurria con subplot() cuando hay 2+ filas.
+        tl1 = tiledlayout(hFig1, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
         for kk = 1:n_panels
-            subplot(n_rows, n_cols, kk);
+            nexttile(tl1);
             plot_panel(irf_med, irf_blo, irf_bhi, kk, label_resp{kk});
         end
-        sgtitle(sprintf('IRF — Shock: %s', label_shock), 'FontSize', fontsizetitle);
+        title(tl1, sprintf('IRF — Shock: %s', label_shock), 'FontSize', fontsizetitle);
         set(gcf, 'PaperPositionMode', 'auto');
         fname1 = fullfile(fig_dir, ['irf_', shock_tag, fig_suffix, '.png']);
         print(fname1, '-dpng');
@@ -256,14 +261,15 @@ for j = 1:n_shocks
         [cirf_med, cirf_blo, cirf_bhi] = calc_stats(cirfs_norm_arr);
 
         hFig2 = figure('Name', sprintf('CIRF - %s', label_shock), 'NumberTitle', 'off');
-        set(hFig2, 'Position', [50 20 180*n_cols 200*n_rows]);
+        set(hFig2, 'Position', [50 20 220*n_cols 220*n_rows]);
+        tl2 = tiledlayout(hFig2, n_rows, n_cols, 'TileSpacing', 'compact', 'Padding', 'compact');
         for kk = 1:n_panels
-            subplot(n_rows, n_cols, kk);
+            nexttile(tl2);
             % Chat 19, Hallazgo 10: el panel solo muestra el nombre de la
-            % variable — "CIRF" ya queda en el sgtitle, no se repite aqui.
+            % variable — "CIRF" ya queda en el titulo general, no se repite aqui.
             plot_panel(cirf_med, cirf_blo, cirf_bhi, kk, label_resp{kk});
         end
-        sgtitle(sprintf('CIRF — Shock: %s', label_shock), 'FontSize', fontsizetitle);
+        title(tl2, sprintf('CIRF — Shock: %s', label_shock), 'FontSize', fontsizetitle);
         set(gcf, 'PaperPositionMode', 'auto');
         fname2 = fullfile(fig_dir, ['cirf_', shock_tag, fig_suffix, '.png']);
         print(fname2, '-dpng');
