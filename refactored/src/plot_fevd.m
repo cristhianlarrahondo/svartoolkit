@@ -130,6 +130,18 @@ axiswidth      = 1;
 color_rest     = [0.80 0.80 0.80];   % gris — "resto no identificado"
 shock_colors   = lines(max(n_shocks_calc, 1));   % paleta MATLAB estandar
 
+% Numero de columnas de la leyenda (Chat 19/20: reparto automatico en
+% filas via 'NumColumns' en vez de 'Orientation','horizontal', que forzaba
+% una sola fila y desbordaba/apretaba con muchos shocks — p.ej. 6+1 items
+% en el caso ERPT). Tope de 4 columnas por fila; con menos items que eso,
+% una sola fila (comportamiento previo, sin cambios visuales).
+n_legend_items = n_shocks_calc + 1;   % + 1 por "Resto"
+legend_ncols   = min(n_legend_items, 4);
+legend_nrows   = ceil(n_legend_items / legend_ncols);
+% Alto extra de figura por cada fila adicional de leyenda, para que no
+% quede apretada contra el eje X.
+fig_height = 340 + 40 * (legend_nrows - 1);
+
 %% ── Una figura por variable de respuesta ────────────────────────────────
 for kk = 1:nresp
     v_idx = response_idx(kk);
@@ -145,7 +157,7 @@ for kk = 1:nresp
     rest_vec = max(1 - sum(med_mat, 2), 0);   % complemento a 1, nunca negativo
 
     hFig = figure('Name', sprintf('FEVD - %s', label_resp{kk}), 'NumberTitle', 'off');
-    set(hFig, 'Position', [50 50 480 380]);
+    set(hFig, 'Position', [50 50 480 fig_height]);
     ax = axes('Parent', hFig);
 
     bar_data = [med_mat, rest_vec];
@@ -168,7 +180,7 @@ for kk = 1:nresp
     title(ax, {title_str; subtitle_str}, 'FontSize', fontsize_title, 'Interpreter', 'none');
 
     legend(ax, [label_shock, {'Resto (no identificado)'}], ...
-        'Location', 'southoutside', 'Orientation', 'horizontal', ...
+        'Location', 'southoutside', 'NumColumns', legend_ncols, ...
         'FontSize', fontsize_axes - 1, 'Box', 'off');
 
     set(hFig, 'PaperPositionMode', 'auto');
