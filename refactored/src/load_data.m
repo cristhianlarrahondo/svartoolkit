@@ -45,6 +45,17 @@ function Dataset = load_data(Cfg)
 %       Semestral  : S1->30/06, S2->31/12
 %       Anual      : 31/12/AAAA
 %
+%   SELECCION DE VARIABLES (Cfg.VARS, Chat 19, Hallazgo 7):
+%     Cfg.VARS (opcional) es un cell array de nombres de columnas de la
+%     hoja "data" (deben coincidir exactamente con los encabezados del
+%     Excel). Si se define, LOAD_DATA selecciona y REORDENA las columnas
+%     segun ese vector, ANTES de aplicar Cfg.VAR_ROLES (que debe tener el
+%     mismo largo y orden que Cfg.VARS cuando este esta definido). Permite
+%     probar specs con menos/mas variables sin editar el Excel.
+%     DEFAULT (retrocompatible): si Cfg.VARS no esta definido o esta
+%     vacio, se usan TODAS las columnas de "data", en el orden del Excel
+%     — comportamiento identico al de antes de este campo.
+%
 %   REGLA DE RUTAS: nunca se usa pwd, cd, ni '..'.
 %   La ruta al proyecto se calcula con fileparts(mfilename('fullpath')).
 %
@@ -116,6 +127,36 @@ if ~iscell(Dataset.var_names), Dataset.var_names = cellstr(Dataset.var_names); e
 nvar_total          = size(Dataset.Y_raw, 2);
 Dataset.nvar_total  = nvar_total;
 Dataset.source_file = xlsx_path;
+
+%% -- Seleccion opcional de variables: Cfg.VARS (Chat 19, Hallazgo 7) ----
+% Si Cfg.VARS esta definido, selecciona y reordena columnas de Y_raw y
+% var_names ANTES de la seccion de metadata y de VAR_ROLES (ambas
+% referencian Dataset.var_names, que ya queda filtrado/reordenado aqui).
+% DEFAULT (Cfg.VARS vacio o ausente): todas las columnas, orden del Excel
+% — reproduce EXACTAMENTE el comportamiento previo a este campo.
+if isfield(Cfg, 'VARS') && ~isempty(Cfg.VARS)
+    vars_wanted = Cfg.VARS;
+    if ~iscell(vars_wanted), vars_wanted = cellstr(vars_wanted); end
+    vars_wanted = vars_wanted(:)';
+
+    col_idx = zeros(1, numel(vars_wanted));
+    for i = 1:numel(vars_wanted)
+        j = find(strcmp(Dataset.var_names, vars_wanted{i}), 1);
+        if isempty(j)
+            error('load_data:varsNotFound', ...
+                ['Cfg.VARS pide la variable "%s", que no existe como columna ' ...
+                 'de la hoja "data" en %s. Columnas disponibles: %s'], ...
+                vars_wanted{i}, xlsx_path, strjoin(Dataset.var_names, ', '));
+        end
+        col_idx(i) = j;
+    end
+
+    Dataset.Y_raw     = Dataset.Y_raw(:, col_idx);
+    Dataset.var_names = Dataset.var_names(col_idx);
+
+    nvar_total         = numel(vars_wanted);
+    Dataset.nvar_total = nvar_total;
+end
 
 %% -- Detectar frecuencia -------------------------------------------------
 Dataset.freq = p_detect_freq(dates_raw);
@@ -254,3 +295,4 @@ catch
 end
 idx = find(strcmp(sheets, sheet_name), 1);
 end
+
