@@ -21,12 +21,25 @@ function fields = get_output_fields()
 %   explicitamente si es "de output" (va aqui) o "de estimacion" (no se
 %   toca por refresh_cfg_output.m). No asumas por defecto.
 %
+%   NOTA (Chat 19): Cfg.FEVD_HORIZONS deliberadamente NO esta en esta
+%   lista, aunque a primera vista parezca "de presentacion" (como
+%   SUMMARY_HORIZONS). A diferencia de SUMMARY_HORIZONS (que solo filtra
+%   horizontes YA calculados en Ltilde para mostrarlos en consola),
+%   Cfg.FEVD_HORIZONS controla QUE HORIZONTES SE CALCULAN dentro de
+%   run_pfa.m/run_is.m (ver esos archivos) — cambiarlo requiere volver a
+%   correr la estimacion completa, igual que Cfg.SHOCK_IDX cuando afecta
+%   la seleccion de shocks para el calculo de FEVD en run_is.m (aunque
+%   Cfg.SHOCK_IDX SI esta en esta lista porque tambien controla, por
+%   separado, la seleccion de IRFs ya calculadas — su efecto sobre FEVD es
+%   la excepcion, no la regla).
+%
 %   Ver tambien: refresh_cfg_output.m, README_cfg_reference.md
 
 fields = { ...
     'SUMMARY_HORIZONS', ...   % print_summary.m
     'CRED_BANDS', ...         % plot_irfs.m, plot_fevd.m, export_results.m, print_summary.m
     'SHOCK_IDX', ...          % select_irfs.m (via plot_irfs/export_results/print_summary)
+    'SHOCK_NAMES', ...        % resolve_shock_name.m (via select_irfs/plot_irfs/plot_fevd/export_results)
     'RESP_IDX', ...           % select_irfs.m, plot_fevd.m, export_results.m
     'IRF_TYPE', ...           % plot_irfs.m, export_results.m
     'IRF_NORM', ...           % plot_irfs.m (via normalize_irfs.m)
@@ -40,3 +53,4 @@ fields = { ...
 };
 
 end
+
