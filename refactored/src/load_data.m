@@ -22,7 +22,9 @@ function Dataset = load_data(Cfg)
 %
 %   METADATA PARCIAL:
 %     Si la hoja "metadata" existe, debe cubrir TODAS las variables de la
-%     hoja "data" (todo o nada). Si cubre solo un subconjunto, LOAD_DATA
+%     hoja "data" (todo o nada), SIEMPRE contra el set COMPLETO de columnas
+%     de "data" — independientemente de si Cfg.VARS selecciona despues un
+%     subconjunto. Si cubre solo un subconjunto del total real, LOAD_DATA
 %     lanza un error explicito en vez de completar labels silenciosamente.
 %
 %   SIN HOJA "metadata":
@@ -49,9 +51,11 @@ function Dataset = load_data(Cfg)
 %     Cfg.VARS (opcional) es un cell array de nombres de columnas de la
 %     hoja "data" (deben coincidir exactamente con los encabezados del
 %     Excel). Si se define, LOAD_DATA selecciona y REORDENA las columnas
-%     segun ese vector, ANTES de aplicar Cfg.VAR_ROLES (que debe tener el
-%     mismo largo y orden que Cfg.VARS cuando este esta definido). Permite
-%     probar specs con menos/mas variables sin editar el Excel.
+%     segun ese vector — DESPUES de resolver "metadata" (que siempre se
+%     valida contra el set COMPLETO de columnas de "data", nunca contra el
+%     subconjunto de Cfg.VARS) y ANTES de aplicar Cfg.VAR_ROLES (que debe
+%     tener el mismo largo y orden que Cfg.VARS cuando este esta definido).
+%     Permite probar specs con menos/mas variables sin editar el Excel.
 %     DEFAULT (retrocompatible): si Cfg.VARS no esta definido o esta
 %     vacio, se usan TODAS las columnas de "data", en el orden del Excel
 %     — comportamiento identico al de antes de este campo.
@@ -128,36 +132,6 @@ nvar_total          = size(Dataset.Y_raw, 2);
 Dataset.nvar_total  = nvar_total;
 Dataset.source_file = xlsx_path;
 
-%% -- Seleccion opcional de variables: Cfg.VARS (Chat 19, Hallazgo 7) ----
-% Si Cfg.VARS esta definido, selecciona y reordena columnas de Y_raw y
-% var_names ANTES de la seccion de metadata y de VAR_ROLES (ambas
-% referencian Dataset.var_names, que ya queda filtrado/reordenado aqui).
-% DEFAULT (Cfg.VARS vacio o ausente): todas las columnas, orden del Excel
-% — reproduce EXACTAMENTE el comportamiento previo a este campo.
-if isfield(Cfg, 'VARS') && ~isempty(Cfg.VARS)
-    vars_wanted = Cfg.VARS;
-    if ~iscell(vars_wanted), vars_wanted = cellstr(vars_wanted); end
-    vars_wanted = vars_wanted(:)';
-
-    col_idx = zeros(1, numel(vars_wanted));
-    for i = 1:numel(vars_wanted)
-        j = find(strcmp(Dataset.var_names, vars_wanted{i}), 1);
-        if isempty(j)
-            error('load_data:varsNotFound', ...
-                ['Cfg.VARS pide la variable "%s", que no existe como columna ' ...
-                 'de la hoja "data" en %s. Columnas disponibles: %s'], ...
-                vars_wanted{i}, xlsx_path, strjoin(Dataset.var_names, ', '));
-        end
-        col_idx(i) = j;
-    end
-
-    Dataset.Y_raw     = Dataset.Y_raw(:, col_idx);
-    Dataset.var_names = Dataset.var_names(col_idx);
-
-    nvar_total         = numel(vars_wanted);
-    Dataset.nvar_total = nvar_total;
-end
-
 %% -- Detectar frecuencia -------------------------------------------------
 Dataset.freq = p_detect_freq(dates_raw);
 
@@ -213,6 +187,41 @@ if has_metadata
 else
     Dataset.var_labels = arrayfun(@(k) sprintf('var%d', k), ...
         1:nvar_total, 'UniformOutput', false);
+end
+
+%% -- Seleccion opcional de variables: Cfg.VARS (Chat 19, Hallazgo 7) ----
+% FIX: este bloque va DESPUES de resolver "metadata" (arriba), no antes.
+% La validacion de metadata parcial compara contra el numero TOTAL de
+% columnas de la hoja "data" — si Cfg.VARS filtrara primero, una metadata
+% legitima que cubre las 5 variables originales pareceria "parcial" al
+% compararla contra las 2 que pidio Cfg.VARS (bug real, reportado con
+% evidencia de consola). Por eso aqui se filtran var_names, Y_raw Y
+% var_labels JUNTOS, ya con var_labels resuelto.
+% DEFAULT (Cfg.VARS vacio o ausente): todas las columnas, orden del Excel
+% — reproduce EXACTAMENTE el comportamiento previo a este campo.
+if isfield(Cfg, 'VARS') && ~isempty(Cfg.VARS)
+    vars_wanted = Cfg.VARS;
+    if ~iscell(vars_wanted), vars_wanted = cellstr(vars_wanted); end
+    vars_wanted = vars_wanted(:)';
+
+    col_idx = zeros(1, numel(vars_wanted));
+    for i = 1:numel(vars_wanted)
+        j = find(strcmp(Dataset.var_names, vars_wanted{i}), 1);
+        if isempty(j)
+            error('load_data:varsNotFound', ...
+                ['Cfg.VARS pide la variable "%s", que no existe como columna ' ...
+                 'de la hoja "data" en %s. Columnas disponibles: %s'], ...
+                vars_wanted{i}, xlsx_path, strjoin(Dataset.var_names, ', '));
+        end
+        col_idx(i) = j;
+    end
+
+    Dataset.Y_raw      = Dataset.Y_raw(:, col_idx);
+    Dataset.var_names  = Dataset.var_names(col_idx);
+    Dataset.var_labels = Dataset.var_labels(col_idx);
+
+    nvar_total         = numel(vars_wanted);
+    Dataset.nvar_total = nvar_total;
 end
 
 %% -- Roles: SIEMPRE desde Cfg.VAR_ROLES, NUNCA desde el Excel -----------
