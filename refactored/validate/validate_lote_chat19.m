@@ -1,56 +1,72 @@
-%VALIDATE_LOTE_CHAT19  Script de verificacion — Chat 19 (Tipo S).
+%VALIDATE_LOTE_CHAT19  Script de verificacion — Chat 19 (Tipo MIXTO: S + R).
 %
-%   Cobertura:
-%   SECCION A — Regresion (confirma que nada de esto rompio BNW)
+%   ACTUALIZACION: este chat paso de ser puramente Tipo S a MIXTO porque
+%   los Hallazgos 6 (FEVD multi-shock/horizonte) y 7/8 (Cfg.VARS + n_vars
+%   auto) tocan run_pfa.m/run_is.m/load_data.m — Tipo R por definicion.
+%   Por eso la Seccion A (regresion BNW completa, Ltilde) se corre
+%   DESPUES de todos los cambios de este chat, no antes.
+%
+%   Cobertura (Secciones A-F: hallazgos ya resueltos antes de esta sesion;
+%   Secciones G-L: hallazgos nuevos de esta sesion):
+%
+%   SECCION A — Regresion (confirma que NADA de este chat, incluyendo los
+%     cambios Tipo R a load_data.m/run_pfa.m/run_is.m, rompio BNW)
 %     (A1) PFA BNW, nd completo, rng(0) -> Ltilde(end,end,end)  = -0.2326865051
 %     (A2) IS  BNW, nd completo, rng(0) -> Ltilde(end,end,end,end) = 0.2041864191
 %
-%   SECCION B — Hallazgo 1: tamano de Cfg.S/Cfg.Z
-%     (B1) Caso 6 variables / 4 shocks con restriccion (2 sin restriccion):
-%          Cfg.S = cell(6,1) construido con build_restriction_row corre
-%          sin error en print_restriction_matrix y validate_cfg
-%     (B2) validate_cfg(Cfg, Dataset) lanza error directo si numel(Cfg.S)
-%          no coincide con Dataset.nvar (simulando el error original
-%          reportado por el usuario: cell(4,1) para un caso de 6 vars)
+%   SECCION B — Hallazgo 1: tamano de Cfg.S/Cfg.Z (ya resuelto)
+%   SECCION C — Hallazgo 2: print_restriction_matrix (ya resuelto)
+%   SECCION D — Hallazgo 4: SHOCK_IDX escalar/vector/'all' (ya resuelto)
+%   SECCION E — Hallazgo 5: refresh_cfg_output / get_output_fields (ya resuelto)
+%   SECCION F — OUTPUT_DIR en las 4 specs (ya resuelto)
 %
-%   SECCION C — Hallazgo 2: print_restriction_matrix
-%     (C1) Corre sin error sobre spec_bnw_pfa (n_vars=5, 1 horizonte)
-%     (C2) Corre sin error sobre el caso sintetico 6 vars / 4 shocks
-%     (C3) Corre sin error con Cfg.HORIZONS_RESTRICT multi-horizonte
+%   SECCION G — Hallazgo 12: plot_irfs grafica TODAS las variables
+%     (G1) Caso sintetico de 6 variables: plot_irfs genera 6 paneles, no 5
+%     (G2) Grid dinamico: 7 variables -> 3 columnas x 3 filas
 %
-%   SECCION D — Hallazgo 4: SHOCK_IDX escalar / vector / 'all'
-%     (D1) select_irfs con shock_idx escalar (retrocompatibilidad)
-%     (D2) select_irfs con shock_idx vector -> cell array de tamano correcto
-%     (D3) select_irfs con shock_idx = 'all' -> numel = nvar
-%     (D4) select_irfs con shock_idx fuera de rango -> error esperado
-%     (D5) select_irfs con shock_idx de tipo invalido -> error esperado
-%     (D6) plot_irfs con Cfg.SHOCK_IDX = [1 2] sobre Results_is real: corre
-%          sin error, genera 2 figuras (una por shock)
-%     (D7) export_results con Cfg.SHOCK_IDX = 'all' sobre Results_is real:
-%          corre sin error, hoja irf_summary tiene filas para todos los
-%          shocks (columna 'shock' con >1 valor distinto)
-%     (D8) print_summary con Cfg.SHOCK_IDX = [1 2]: corre sin error
-%     (D9) plot_fevd respeta Cfg.OUTPUT_DIR (Hallazgo 4, bug adicional
-%          encontrado en este chat)
+%   SECCION H — Hallazgo 6: FEVD multi-shock x multi-horizonte
+%     (H1) run_is.m: Results.FEVD tiene forma [n x n_fevd_shocks x n_fevd_h x ne]
+%     (H2) Default IS (Cfg.SHOCK_IDX no definido): FEVD_shock_idx = 1:n ('all')
+%     (H3) Cfg.SHOCK_IDX=[1 2] (IS): FEVD_shock_idx == [1 2]
+%     (H4) Cfg.FEVD_HORIZONS=[1 5 10]: FEVD_horizons == [1 5 10], n_fevd_h=3
+%     (H5) run_pfa.m: Results.FEVD tiene forma [n x 1 x n_fevd_h x nd]
+%     (H6) Cfg.FEVD_HORIZONS=0 (invalido, <1) -> error esperado (run_is/run_pfa)
+%     (H7) plot_fevd corre sin error sobre Results_is real y genera 1
+%          archivo POR VARIABLE (nvar archivos fevd_var<K>_*.png)
+%     (H8) plot_fevd con PFA skipped (>1 shock restringido): retorna sin
+%          error y sin generar archivos (is_run_skipped)
 %
-%   SECCION E — Hallazgo 5: refresh_cfg_output / get_output_fields
-%     (E1) get_output_fields() devuelve lista sin duplicados
-%     (E2) refresh_cfg_output actualiza SOLO campos de output; un campo de
-%          estimacion alterado artificialmente en el struct "stale" NO se
-%          pierde
-%     (E3) refresh_cfg_output SI actualiza SHOCK_IDX/CRED_BANDS/OUTPUT_DIR
-%          a los valores actuales del archivo de spec en disco
+%   SECCION I — Hallazgo 7/8: Cfg.VARS + n_vars auto-derivado
+%     (I1) Cfg.VARS no definido (BNW): Dataset.nvar_total y var_names
+%          identicos a cargar sin Cfg.VARS — regresion exacta
+%     (I2) Cfg.VARS = subconjunto/reordenado de 3 de las 5 variables BNW:
+%          Dataset.nvar_total=3, orden y contenido correctos
+%     (I3) Cfg.VARS con un nombre inexistente -> error esperado
+%     (I4) validate_cfg detecta numel(Cfg.VARS) != numel(Cfg.VAR_ROLES)
 %
-%   SECCION F — OUTPUT_DIR (item de maxima prioridad, ya resuelto)
-%     (F1) spec_template_pfa.m / spec_template_is.m definen Cfg.OUTPUT_DIR
-%     (F2) spec_oil_pfa.m / spec_oil_is.m definen Cfg.OUTPUT_DIR
+%   SECCION J — Hallazgo 9: Cfg.SHOCK_NAMES (naming, ya no reusa var_labels)
+%     (J1) select_irfs sin SHOCK_NAMES -> labels_shock = 'shock1','shock2',...
+%     (J2) select_irfs con SHOCK_NAMES = {'supply','demand'} -> labels
+%          correctos, y NO coinciden con los labels de variables
+%     (J3) plot_irfs con SHOCK_NAMES genera archivo 'irf_shock1_supply*.png'
+%
+%   SECCION K — Hallazgo 10: titulos IRF vs CIRF diferenciados
+%     (K1) Figura IRF: Name contiene 'IRF - ', no 'CIRF -'
+%     (K2) Figura CIRF: Name contiene 'CIRF - '
+%
+%   SECCION L — Hallazgo 11: export_results formato ancho
+%     (L1) Hoja irf_summary tiene columnas '<resp>_median'/'<resp>_p16'/
+%          '<resp>_p84' (formato ancho), no columnas 'response'/'median' (largo)
+%     (L2) Filas ordenadas por horizonte ascendente desde 0
+%     (L3) fevd_summary_v<k> (o fevd_summary si nresp=1) existe con
+%          columnas por shock
 %
 %   Uso: ejecutar desde MATLAB (cualquier working directory).
 %        EDITAR la variable REF_ROOT abajo antes de correr.
 
 fprintf('\n');
 fprintf('================================================================\n');
-fprintf(' VALIDATE_LOTE_CHAT19 — Chat 19 (Tipo S)\n');
+fprintf(' VALIDATE_LOTE_CHAT19 — Chat 19 (Tipo MIXTO: S + R)\n');
 fprintf('================================================================\n\n');
 
 %% ── Setup de rutas ────────────────────────────────────────────────────────
@@ -250,8 +266,14 @@ n_results(end+1) = check('D8: print_summary con SHOCK_IDX=[1 2] corre sin error'
 ok_d9 = true;
 try
     close all;
-    plot_fevd(Results_is.FEVD, Dataset, Cfg_is);   % Cfg_is.OUTPUT_DIR = projects/bnw/output
-    fname_expected = fullfile(Cfg_is.OUTPUT_DIR, 'figures', ['fevd_', lower(Cfg_is.MODE), '.png']);
+    plot_fevd(Results_is, Dataset, Cfg_is);   % Chat 19: firma nueva (Results, Dataset, Cfg)
+    % Nombre esperado con la convencion nueva (Hallazgo 9, adaptada a FEVD
+    % por variable): fevd_var<K>_<VARNAME>.png para la primera variable
+    % endogena de BNW (tfp, var 1).
+    endo_mask_d9 = strcmp(Dataset.var_roles, 'endogenous');
+    v1_label     = Dataset.var_labels(endo_mask_d9); v1_label = v1_label{1};
+    v1_safe      = regexprep(v1_label, '[^a-zA-Z0-9_]', '_');
+    fname_expected = fullfile(Cfg_is.OUTPUT_DIR, 'figures', sprintf('fevd_var1_%s.png', v1_safe));
     ok_d9 = isfile(fname_expected);
 catch
     ok_d9 = false;
@@ -296,6 +318,240 @@ n_results(end+1) = check('F2: spec_oil_pfa.m define Cfg.OUTPUT_DIR', ...
 n_results(end+1) = check('F2b: spec_oil_is.m define Cfg.OUTPUT_DIR', ...
     isfield(Cfg_o2, 'OUTPUT_DIR') && ~isempty(Cfg_o2.OUTPUT_DIR), 'campo ausente');
 
+%% ── SECCION G — Hallazgo 12: plot_irfs grafica TODAS las variables ──────
+fprintf('\n--- SECCION G: Hallazgo 12 (grid dinamico, sin truncar variables) ---\n');
+
+tmp_out_g = fullfile(tempdir, 'validate_chat19_tmp_g');
+if ~isfolder(tmp_out_g), mkdir(tmp_out_g); end
+
+for nvar_g = [6 7]
+    horizon_g = 10; nd_g = 30;
+    clear LtildeG Dataset_g Cfg_g
+    LtildeG.mode      = 'pfa';
+    LtildeG.data      = randn(horizon_g+1, nvar_g, nd_g);
+    LtildeG.shock_idx = 1;
+    LtildeG.horizon   = horizon_g;
+    LtildeG.nvar      = nvar_g;
+    LtildeG.ndraws    = nd_g;
+
+    Dataset_g.var_roles  = repmat({'endogenous'}, 1, nvar_g);
+    Dataset_g.var_labels = arrayfun(@(k) sprintf('var%d', k), 1:nvar_g, 'UniformOutput', false);
+
+    Cfg_g.IRF_TYPE   = 'irf';
+    Cfg_g.SHOCK_IDX  = 1;
+    Cfg_g.CRED_BANDS = [0.16 0.84];
+    Cfg_g.OUTPUT_DIR = tmp_out_g;
+
+    ok_gk = true; n_axes = 0;
+    try
+        close all;
+        plot_irfs(LtildeG, Dataset_g, Cfg_g);
+        n_axes = numel(findobj(gcf, 'Type', 'axes'));
+    catch
+        ok_gk = false;
+    end
+    n_results(end+1) = check(sprintf('G: plot_irfs grafica las %d variables (no trunca)', nvar_g), ...
+        ok_gk && n_axes == nvar_g, sprintf('n_axes=%d (esperado %d)', n_axes, nvar_g));
+    close all;
+end
+
+%% ── SECCION H — Hallazgo 6: FEVD multi-shock x multi-horizonte ──────────
+fprintf('\n--- SECCION H: Hallazgo 6 (FEVD multi-shock/horizonte) ---\n');
+
+n_h_test = numel(Cfg_is.FEVD_HORIZONS);   % = 40, via spec_bnw_base.m (1:HORIZON)
+
+n_results(end+1) = check('H1: run_is.m Results.FEVD tiene forma [n x n_fevd_shocks x n_fevd_h x ne]', ...
+    ndims(Results_is.FEVD) == 4 && size(Results_is.FEVD,1) == 5, ...
+    sprintf('size=%s', mat2str(size(Results_is.FEVD))));
+
+% H2: default IS (sin Cfg.SHOCK_IDX) -> FEVD_shock_idx = 1:n ('all')
+Cfg_h2 = Cfg_is; Cfg_h2.ND = 200; Cfg_h2 = rmfield(Cfg_h2, 'SHOCK_IDX');
+rng(Cfg_h2.SEED);
+Results_h2 = run_is(Post_is, Cfg_h2);
+n_results(end+1) = check('H2: IS sin Cfg.SHOCK_IDX -> FEVD_shock_idx == 1:5 (default all)', ...
+    isequal(Results_h2.FEVD_shock_idx, 1:5), sprintf('obtenido %s', mat2str(Results_h2.FEVD_shock_idx)));
+
+% H3: Cfg.SHOCK_IDX=[1 2] -> FEVD_shock_idx == [1 2]
+Cfg_h3 = Cfg_is; Cfg_h3.ND = 200; Cfg_h3.SHOCK_IDX = [1 2];
+rng(Cfg_h3.SEED);
+Results_h3 = run_is(Post_is, Cfg_h3);
+n_results(end+1) = check('H3: IS con Cfg.SHOCK_IDX=[1 2] -> FEVD_shock_idx == [1 2]', ...
+    isequal(Results_h3.FEVD_shock_idx, [1 2]), sprintf('obtenido %s', mat2str(Results_h3.FEVD_shock_idx)));
+
+% H4: Cfg.FEVD_HORIZONS=[1 5 10] -> FEVD_horizons == [1 5 10]
+Cfg_h4 = Cfg_is; Cfg_h4.ND = 200; Cfg_h4.FEVD_HORIZONS = [1 5 10];
+rng(Cfg_h4.SEED);
+Results_h4 = run_is(Post_is, Cfg_h4);
+n_results(end+1) = check('H4: Cfg.FEVD_HORIZONS=[1 5 10] -> FEVD_horizons coincide y n_fevd_h=3', ...
+    isequal(Results_h4.FEVD_horizons, [1 5 10]) && size(Results_h4.FEVD,3) == 3, ...
+    sprintf('FEVD_horizons=%s, size dim3=%d', mat2str(Results_h4.FEVD_horizons), size(Results_h4.FEVD,3)));
+
+% H5: run_pfa.m -> FEVD tiene forma [n x 1 x n_fevd_h x nd]
+n_results(end+1) = check('H5: run_pfa.m Results.FEVD tiene dimension de shock == 1', ...
+    ndims(Results_pfa.FEVD) == 4 && size(Results_pfa.FEVD,2) == 1, ...
+    sprintf('size=%s', mat2str(size(Results_pfa.FEVD))));
+
+% H6: Cfg.FEVD_HORIZONS=0 (invalido) -> error esperado, en IS y en PFA
+Cfg_h6is = Cfg_is; Cfg_h6is.ND = 20; Cfg_h6is.FEVD_HORIZONS = 0;
+threw_h6is = false;
+try
+    run_is(Post_is, Cfg_h6is);
+catch
+    threw_h6is = true;
+end
+n_results(end+1) = check('H6a: run_is con Cfg.FEVD_HORIZONS=0 -> error esperado', threw_h6is, 'no lanzo error');
+
+Cfg_h6pfa = Cfg_pfa; Cfg_h6pfa.ND = 20; Cfg_h6pfa.FEVD_HORIZONS = 0;
+threw_h6pfa = false;
+try
+    rng(Cfg_h6pfa.SEED);
+    run_pfa(Post_pfa, Cfg_h6pfa);
+catch
+    threw_h6pfa = true;
+end
+n_results(end+1) = check('H6b: run_pfa con Cfg.FEVD_HORIZONS=0 -> error esperado', threw_h6pfa, 'no lanzo error');
+
+% H7: plot_fevd corre sin error y genera 1 archivo POR VARIABLE (5 en BNW)
+tmp_out_h = fullfile(tempdir, 'validate_chat19_tmp_h');
+if ~isfolder(tmp_out_h), mkdir(tmp_out_h); end
+Cfg_h7 = Cfg_is; Cfg_h7.OUTPUT_DIR = tmp_out_h;
+ok_h7 = true; n_fevd_files = 0;
+try
+    close all;
+    plot_fevd(Results_is, Dataset, Cfg_h7);
+    d = dir(fullfile(tmp_out_h, 'figures', 'fevd_var*.png'));
+    n_fevd_files = numel(d);
+catch
+    ok_h7 = false;
+end
+n_results(end+1) = check('H7: plot_fevd genera 1 archivo POR VARIABLE (5 en BNW)', ...
+    ok_h7 && n_fevd_files == 5, sprintf('n_fevd_files=%d', n_fevd_files));
+close all;
+
+% H8: plot_fevd con corrida "skipped" -> retorna sin error, sin archivos
+Results_h8.skipped     = true;
+Results_h8.skip_reason = 'prueba sintetica H8';
+n_before_h8 = numel(dir(fullfile(tmp_out_h, 'figures', 'fevd_var*.png')));
+ok_h8 = true;
+try
+    plot_fevd(Results_h8, Dataset, Cfg_h7);
+catch
+    ok_h8 = false;
+end
+n_after_h8 = numel(dir(fullfile(tmp_out_h, 'figures', 'fevd_var*.png')));
+n_results(end+1) = check('H8: plot_fevd con Results.skipped=true no falla y no genera archivos nuevos', ...
+    ok_h8 && n_after_h8 == n_before_h8, sprintf('antes=%d, despues=%d, ok=%d', n_before_h8, n_after_h8, ok_h8));
+
+%% ── SECCION I — Hallazgo 7/8: Cfg.VARS + n_vars auto-derivado ───────────
+fprintf('\n--- SECCION I: Hallazgo 7/8 (Cfg.VARS + n_vars auto) ---\n');
+
+n_results(end+1) = check('I1: sin Cfg.VARS (BNW), Dataset.nvar_total == 5 (regresion)', ...
+    Dataset.nvar_total == 5, sprintf('nvar_total=%d', Dataset.nvar_total));
+
+Cfg_i2 = Cfg_pfa;
+Cfg_i2.VARS = {Dataset.var_names{3}, Dataset.var_names{1}};   % 2 de 5, reordenadas
+Dataset_i2 = load_data(Cfg_i2);
+n_results(end+1) = check('I2: Cfg.VARS selecciona y reordena 2 de 5 columnas correctamente', ...
+    Dataset_i2.nvar_total == 2 && ...
+    strcmp(Dataset_i2.var_names{1}, Dataset.var_names{3}) && ...
+    strcmp(Dataset_i2.var_names{2}, Dataset.var_names{1}), ...
+    sprintf('nvar_total=%d, var_names=%s', Dataset_i2.nvar_total, strjoin(Dataset_i2.var_names, ',')));
+
+Cfg_i3 = Cfg_pfa;
+Cfg_i3.VARS = {'variable_que_no_existe_xyz'};
+threw_i3 = false;
+try
+    load_data(Cfg_i3);
+catch
+    threw_i3 = true;
+end
+n_results(end+1) = check('I3: Cfg.VARS con nombre inexistente -> error esperado', threw_i3, 'no lanzo error');
+
+Cfg_i4 = Cfg_pfa;
+Cfg_i4.VARS      = {Dataset.var_names{1}, Dataset.var_names{2}};   % 2 elementos
+Cfg_i4.VAR_ROLES = {'endogenous'};                                  % 1 elemento (mismatch)
+threw_i4 = false;
+try
+    validate_cfg(Cfg_i4);
+catch err
+    threw_i4 = strcmp(err.identifier, 'validate_cfg:varsRolesMismatch');
+end
+n_results(end+1) = check('I4: validate_cfg detecta numel(Cfg.VARS) != numel(Cfg.VAR_ROLES)', threw_i4, 'no lanzo el error esperado');
+
+%% ── SECCION J — Hallazgo 9: Cfg.SHOCK_NAMES ──────────────────────────────
+fprintf('\n--- SECCION J: Hallazgo 9 (SHOCK_NAMES, ya no reusa var_labels) ---\n');
+
+[~, labels_j1] = select_irfs(LtildeIS, [1 2], 1:5);
+n_results(end+1) = check('J1: select_irfs sin SHOCK_NAMES -> labels shock1/shock2', ...
+    isequal(labels_j1, {'shock1','shock2'}), sprintf('obtenido %s', strjoin(labels_j1, ',')));
+
+[~, labels_j2] = select_irfs(LtildeIS, [1 2], 1:5, {'supply','demand'});
+var_labels_15 = Dataset.var_labels(endo_mask);
+n_results(end+1) = check('J2: select_irfs con SHOCK_NAMES usa esos nombres (no var_labels)', ...
+    isequal(labels_j2, {'supply','demand'}) && ~isequal(labels_j2, var_labels_15(1:2)), ...
+    sprintf('obtenido %s', strjoin(labels_j2, ',')));
+
+tmp_out_j = fullfile(tempdir, 'validate_chat19_tmp_j');
+if ~isfolder(tmp_out_j), mkdir(tmp_out_j); end
+Cfg_j3 = Cfg_is; Cfg_j3.OUTPUT_DIR = tmp_out_j; Cfg_j3.SHOCK_IDX = 1; Cfg_j3.SHOCK_NAMES = {'supply'};
+ok_j3 = true;
+try
+    close all;
+    plot_irfs(Results_is.LtildeStruct, Dataset, Cfg_j3, Results_is);
+catch
+    ok_j3 = false;
+end
+d_j3 = dir(fullfile(tmp_out_j, 'figures', 'irf_shock1_supply*.png'));
+n_results(end+1) = check('J3: plot_irfs con SHOCK_NAMES genera irf_shock1_supply*.png', ...
+    ok_j3 && numel(d_j3) >= 1, sprintf('archivos encontrados=%d', numel(d_j3)));
+close all;
+
+%% ── SECCION K — Hallazgo 10: titulos IRF vs CIRF diferenciados ──────────
+fprintf('\n--- SECCION K: Hallazgo 10 (titulos IRF/CIRF diferenciados) ---\n');
+
+Cfg_k = Cfg_is; Cfg_k.OUTPUT_DIR = tmp_out_j; Cfg_k.SHOCK_IDX = 1; Cfg_k.IRF_TYPE = 'both';
+ok_k = true;
+try
+    close all;
+    plot_irfs(Results_is.LtildeStruct, Dataset, Cfg_k, Results_is);
+    figs_k = findobj('Type', 'figure');
+    names_k = get(figs_k, 'Name');
+    if ~iscell(names_k), names_k = {names_k}; end
+    has_irf  = any(contains(names_k, 'IRF - ') & ~contains(names_k, 'CIRF'));
+    has_cirf = any(contains(names_k, 'CIRF - '));
+catch
+    ok_k = false; has_irf = false; has_cirf = false;
+end
+n_results(end+1) = check('K: figuras IRF y CIRF tienen nombres diferenciados (''IRF - '' vs ''CIRF - '')', ...
+    ok_k && has_irf && has_cirf, sprintf('has_irf=%d, has_cirf=%d', has_irf, has_cirf));
+close all;
+
+%% ── SECCION L — Hallazgo 11: export_results formato ancho ───────────────
+fprintf('\n--- SECCION L: Hallazgo 11 (export_results formato ancho) ---\n');
+
+Cfg_l = Cfg_is; Cfg_l.OUTPUT_DIR = tmp_out_j; Cfg_l.SPEC_NAME = 'validate_chat19_export_wide';
+ok_l = true;
+try
+    export_results(Results_is, Dataset, Cfg_l);
+    xlsx_l = fullfile(Cfg_l.OUTPUT_DIR, 'tables', 'validate_chat19_export_wide_results.xlsx');
+    sheets_l = sheetnames(xlsx_l);
+    irf_sheet_l = sheets_l(startsWith(sheets_l, 'irf_summary'));
+    T_l = readtable(xlsx_l, 'Sheet', irf_sheet_l{1});
+    has_wide_cols = any(endsWith(T_l.Properties.VariableNames, '_median'));
+    horizons_l = T_l.horizon;
+    is_ascending = issorted(horizons_l) && horizons_l(1) == 0;
+    fevd_sheets_l = sheets_l(startsWith(sheets_l, 'fevd_summary'));
+    has_fevd_sheet = numel(fevd_sheets_l) >= 1;
+catch
+    ok_l = false; has_wide_cols = false; is_ascending = false; has_fevd_sheet = false;
+end
+n_results(end+1) = check('L1: irf_summary tiene columnas anchas (''<resp>_median'')', ...
+    ok_l && has_wide_cols, 'columnas no encontradas');
+n_results(end+1) = check('L2: filas de irf_summary ordenadas por horizonte ascendente desde 0', ...
+    ok_l && is_ascending, 'orden incorrecto');
+n_results(end+1) = check('L3: existe al menos una hoja fevd_summary[_v<k>]', ...
+    ok_l && has_fevd_sheet, 'hoja fevd_summary ausente');
+
 %% ── Veredicto final ───────────────────────────────────────────────────────
 n_pass = sum(n_results);
 n_fail = sum(~n_results);
@@ -318,3 +574,4 @@ function ok_out = check(name, ok, detail)
     end
     ok_out = ok;
 end
+
