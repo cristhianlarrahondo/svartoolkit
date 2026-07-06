@@ -27,6 +27,17 @@ function plot_fevd(Results, Dataset, Cfg)
 %   por shock — ver discusión con el usuario): 'fevd_var<K>_<VARNAME>.png',
 %   con K = indice ordinal real de la variable (1..nvar).
 %
+%   ORDEN DE LEYENDA (Chat 20): primero los shocks CON nombre real
+%   (Cfg.SHOCK_NAMES), preservando su orden relativo; luego los que
+%   quedaron con el nombre default 'shockN' (sin identificar); "Resto (no
+%   identificado)" siempre al final. Los colores de cada segmento de la
+%   barra se reordenan junto con la leyenda para mantener la
+%   correspondencia color-nombre.
+%
+%   SIN SUBTITULO DE MODO (Chat 20): el titulo ya NO incluye "Modo:
+%   PFA/IS" — esa identificacion la da el NOMBRE DEL ARCHIVO (via
+%   Cfg.FIG_SUFFIX, p.ej. 'fevd_var1_x_bnw_is.png' vs '..._bnw_pfa.png').
+%
 %   Campos de Cfg usados:
 %     RESP_IDX      vector   (default: todas las variables, según
 %                   Results.FEVD)
@@ -34,7 +45,6 @@ function plot_fevd(Results, Dataset, Cfg)
 %                   vía resolve_shock_name.m) — usado en la LEYENDA, no en
 %                   el nombre de archivo (que es por variable, no por shock).
 %     FIG_SUFFIX    string   (default '')
-%     MODE          string   (default 'unknown') — solo para el subtítulo
 %     OUTPUT_DIR    string   (OPCIONAL) — ver plot_irfs.m/export_results.m
 
 %% ── Guard: corrida omitida (p.ej. PFA con >1 choque restringido) ────────
@@ -76,11 +86,6 @@ if isfield(Cfg, 'FIG_SUFFIX') && ~isempty(Cfg.FIG_SUFFIX)
     fig_suffix = Cfg.FIG_SUFFIX;
 end
 
-mode_str = 'unknown';
-if isfield(Cfg, 'MODE') && ~isempty(Cfg.MODE)
-    mode_str = lower(Cfg.MODE);
-end
-
 shock_names = {};
 if isfield(Cfg, 'SHOCK_NAMES') && ~isempty(Cfg.SHOCK_NAMES)
     shock_names = Cfg.SHOCK_NAMES;
@@ -108,10 +113,22 @@ for kk = 1:nresp
 end
 
 %% ── Labels de shocks (para la leyenda) ───────────────────────────────────
-label_shock = cell(1, n_shocks_calc);
+label_shock_raw = cell(1, n_shocks_calc);
+is_named        = false(1, n_shocks_calc);
 for jj = 1:n_shocks_calc
-    label_shock{jj} = resolve_shock_name(shock_names, fevd_shock_idx(jj));
+    idx_shock = fevd_shock_idx(jj);
+    label_shock_raw{jj} = resolve_shock_name(shock_names, idx_shock);
+    is_named(jj) = ~isempty(shock_names) && idx_shock <= numel(shock_names) && ~isempty(shock_names{idx_shock});
 end
+
+% Orden de leyenda: primero los shocks CON nombre real (Cfg.SHOCK_NAMES),
+% preservando su orden relativo; luego los que quedaron con el nombre
+% default 'shockN' (sin identificar), preservando su orden relativo;
+% "Resto (no identificado)" se agrega SIEMPRE al final, fuera de este
+% orden. Se reordenan labels/colores JUNTOS para que el color de cada
+% segmento en la barra siga correspondiendo a su entrada en la leyenda.
+legend_perm = [find(is_named), find(~is_named)];
+label_shock = label_shock_raw(legend_perm);
 
 %% ── Paths de salida ──────────────────────────────────────────────────────
 if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
@@ -146,12 +163,14 @@ fig_height = 340 + 40 * (legend_nrows - 1);
 for kk = 1:nresp
     v_idx = response_idx(kk);
 
-    % Medianas [n_h x n_shocks_calc]
+    % Medianas [n_h x n_shocks_calc], YA en el orden de leyenda (legend_perm):
+    % identificados primero, luego sin identificar. "Resto" se agrega aparte.
     med_mat = zeros(n_h, n_shocks_calc);
-    for jj = 1:n_shocks_calc
+    for pp = 1:n_shocks_calc
+        jj = legend_perm(pp);   % indice ORIGINAL en FEVD/fevd_shock_idx
         for hh_i = 1:n_h
             sl = FEVD(v_idx, jj, hh_i, :);
-            med_mat(hh_i, jj) = quantile(sl(:), 0.50);
+            med_mat(hh_i, pp) = quantile(sl(:), 0.50);
         end
     end
     rest_vec = max(1 - sum(med_mat, 2), 0);   % complemento a 1, nunca negativo
@@ -162,8 +181,8 @@ for kk = 1:nresp
 
     bar_data = [med_mat, rest_vec];
     hbars = bar(ax, fevd_horizons, bar_data, 'stacked', 'EdgeColor', 'none');
-    for jj = 1:n_shocks_calc
-        hbars(jj).FaceColor = shock_colors(jj, :);
+    for pp = 1:n_shocks_calc
+        hbars(pp).FaceColor = shock_colors(legend_perm(pp), :);
     end
     hbars(end).FaceColor = color_rest;
 
@@ -175,9 +194,9 @@ for kk = 1:nresp
     grid(ax, 'on'); box(ax, 'off');
     set(ax, 'GridAlpha', 0.15);
 
-    title_str    = sprintf('FEVD — %s', label_resp{kk});
-    subtitle_str = sprintf('Modo: %s', upper(mode_str));
-    title(ax, {title_str; subtitle_str}, 'FontSize', fontsize_title, 'Interpreter', 'none');
+    % Chat 20: se quita el subtitulo "Modo: PFA/IS" — esa identificacion ya
+    % la da el nombre del archivo (via Cfg.FIG_SUFFIX, p.ej. fevd_var1_x_bnw_is.png).
+    title(ax, sprintf('FEVD — %s', label_resp{kk}), 'FontSize', fontsize_title, 'Interpreter', 'none');
 
     legend(ax, [label_shock, {'Resto (no identificado)'}], ...
         'Location', 'southoutside', 'NumColumns', legend_ncols, ...
