@@ -55,7 +55,7 @@ fprintf('================================================================\n\n');
 
 %% ── Setup de rutas ────────────────────────────────────────────────────────
 %  EDITAR: ruta absoluta a refactored/
-REF_ROOT = '/ruta/absoluta/a/refactored';   % ← EDITAR
+REF_ROOT = '/Users/cristhianlarrahondo/Documents/GitHub/svartoolkit/refactored';   % ← EDITAR
 
 addpath(fullfile(REF_ROOT, 'src'));
 addpath(fullfile(REF_ROOT, 'helpfunctions'));
