@@ -43,8 +43,18 @@ function Results = run_pfa(PosteriorParams, Cfg)
 %     Cfg              struct de config/spec_*.m
 %
 %   Salida (caso normal): Results struct con campos:
-%     .LtildeStruct   struct canonica (via pack_ltilde.m)
-%     .FEVD           [n x nd]  forecast error variance decomposition
+%     .LtildeStruct     struct canonica (via pack_ltilde.m)
+%     .FEVD             [n x 1 x n_fevd_h x nd]  forecast error variance
+%                       decomposition del shock identificado, en los
+%                       horizontes de Cfg.FEVD_HORIZONS (Chat 19, Hallazgo
+%                       6 — antes era [n x nd], un solo horizonte fijo).
+%                       La dimension de shock es SIEMPRE 1 en PFA: el
+%                       metodo Mountford-Uhlig identifica un unico shock
+%                       por corrida, asi que no hay FEVD multi-shock aqui
+%                       (ver run_is.m para eso).
+%     .FEVD_shock_idx   escalar — el shock identificado (= shock_idx)
+%     .FEVD_horizons    [1 x n_fevd_h] — horizontes calculados (resuelto
+%                       de Cfg.FEVD_HORIZONS; default = Cfg.INDEX_FEVD)
 %     .Bdraws         {nd x 1}  draws de B
 %     .Sigmadraws     {nd x 1}  draws de Sigma
 %     .Qdraws         {nd x 1}  draws de Q (vector q optimo del PFA)
@@ -57,7 +67,7 @@ function Results = run_pfa(PosteriorParams, Cfg)
 %     .LtildeStruct   struct minima con .skipped=true (para que las
 %                     funciones de post-proceso lo detecten via
 %                     is_run_skipped.m sin fallar)
-%     .FEVD, .Bdraws, .Sigmadraws, .Qdraws  vacios
+%     .FEVD, .FEVD_shock_idx, .FEVD_horizons, .Bdraws, .Sigmadraws, .Qdraws  vacios
 %     .t_elapsed      0
 
 %% ── Extraer campos de Cfg ────────────────────────────────────────────────
@@ -91,10 +101,12 @@ if n_shocks_restringidos > 1
         strtrim(sprintf('%d ', shocks_con_restriccion)));
     warning('run_pfa:multiShockNotSupported', '%s', msg);
 
-    Results.skipped      = true;
-    Results.skip_reason  = msg;
-    Results.LtildeStruct = struct('skipped', true, 'skip_reason', msg);
-    Results.FEVD         = [];
+    Results.skipped        = true;
+    Results.skip_reason    = msg;
+    Results.LtildeStruct   = struct('skipped', true, 'skip_reason', msg);
+    Results.FEVD           = [];
+    Results.FEVD_shock_idx = [];
+    Results.FEVD_horizons  = [];
     Results.Bdraws       = {};
     Results.Sigmadraws   = {};
     Results.Qdraws       = {};
@@ -167,6 +179,29 @@ horizon   = Cfg.HORIZON;
 index     = Cfg.INDEX_FEVD;
 iter_show = Cfg.ITER_SHOW;
 
+%% ── FEVD: horizontes a calcular (Chat 19, Hallazgo 6) ────────────────────
+% Cfg.FEVD_HORIZONS (opcional): vector de horizontes para los que se
+% calcula la FEVD del shock identificado (PFA solo identifica UN shock por
+% corrida — ver limitacion documentada arriba — asi que aqui no hay
+% seleccion de shocks, solo de horizontes).
+% DEFAULT (retrocompatible): Cfg.INDEX_FEVD (escalar) — reproduce
+% EXACTAMENTE el valor unico que se calculaba antes de este campo.
+% Misma convencion de "t" que usaba Cfg.INDEX_FEVD (ver variancedecomposition.m,
+% helpfunctions/, no modificado): t=0 produce division 0/0, por eso se
+% exige t>=1.
+if isfield(Cfg, 'FEVD_HORIZONS') && ~isempty(Cfg.FEVD_HORIZONS)
+    fevd_horizons = Cfg.FEVD_HORIZONS(:)';
+else
+    fevd_horizons = index;
+end
+if any(fevd_horizons < 1)
+    error('run_pfa:badFevdHorizons', ...
+        ['Cfg.FEVD_HORIZONS debe contener enteros >= 1 (convencion de ' ...
+         'variancedecomposition.m: horizonte 0 produce division 0/0). ' ...
+         'Recibido: %s'], mat2str(fevd_horizons));
+end
+n_fevd_h = numel(fevd_horizons);
+
 %% ── Cronómetro ───────────────────────────────────────────────────────────
 t_start = tic;
 
@@ -188,7 +223,7 @@ Bdraws     = cell(nd, 1);
 Sigmadraws = cell(nd, 1);
 Qdraws     = cell(nd, 1);
 Ltilde     = zeros(horizon+1, n, nd);
-FEVD       = zeros(n, nd);
+FEVD       = zeros(n, 1, n_fevd_h, nd);   % [n x 1 shock x n_fevd_h x nd]
 
 optim_opts = optimset('MaxFunEvals', 40000, 'MaxIter', 20000, ...
     'Display', 'off', 'Algorithm', 'active-set');
@@ -270,8 +305,10 @@ while record <= nd
         Ltilde(h, :, record) = (J' * ((F')^(h-1)) * J) * L * q;
     end
 
-    %% ── FEVD (igual que el original) ─────────────────────────────────────
-    FEVD(:, record) = variancedecomposition(F', J, Sigmadraw, L*q, n, index);
+    %% ── FEVD (formula igual que el original; ahora en varios horizontes) ─
+    for hh_i = 1:n_fevd_h
+        FEVD(:, 1, hh_i, record) = variancedecomposition(F', J, Sigmadraw, L*q, n, fevd_horizons(hh_i));
+    end
 
     %% ── Progress display ─────────────────────────────────────────────────
     if counter == iter_show
@@ -288,9 +325,11 @@ end  % while
 LtildeStruct = pack_ltilde(Ltilde, 'pfa', shock_idx, horizon, n, nd);
 
 %% ── Empaquetar Results ───────────────────────────────────────────────────
-Results.skipped      = false;
-Results.LtildeStruct = LtildeStruct;
-Results.FEVD         = FEVD;
+Results.skipped        = false;
+Results.LtildeStruct   = LtildeStruct;
+Results.FEVD           = FEVD;             % [n x 1 shock x n_fevd_h x nd]
+Results.FEVD_shock_idx = shock_idx;        % escalar: el unico shock identificado
+Results.FEVD_horizons  = fevd_horizons;    % vector de horizontes calculados
 Results.Bdraws       = Bdraws;
 Results.Sigmadraws   = Sigmadraws;
 Results.Qdraws       = Qdraws;
@@ -300,3 +339,4 @@ Results.t_elapsed    = toc(t_start);
 print_run_summary(Cfg, Results, Results.t_elapsed);
 
 end
+
