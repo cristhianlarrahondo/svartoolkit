@@ -20,6 +20,15 @@ cfg_dir       = fileparts(mfilename('fullpath'));
 ex_dir        = fileparts(cfg_dir);
 Cfg.DATA_FILE = fullfile(ex_dir, 'data', 'data_micaso.xlsx');  % ← EDITAR
 
+% Cfg.VARS (Chat 19, Hallazgo 7 — OPCIONAL): selecciona/reordena columnas
+% de la hoja "data" por NOMBRE, sin editar el Excel. Vacio/comentado =
+% todas las columnas en el orden del Excel.
+% Cfg.VARS = {'prod_growth', 'act_growth', 'price_growth', 'inv_growth'};  % ← EDITAR (opcional)
+
+% Cfg.VAR_ROLES (← EDITAR): mismo largo y orden que Cfg.VARS (si lo
+% definiste) o que las columnas de la hoja "data" (si no).
+Cfg.VAR_ROLES = {'endogenous','endogenous','endogenous','endogenous'};  % ← EDITAR
+
 Cfg.SCALE_FACTOR = 1;      % ← EDITAR: 1 (ya en %) | 100 (en logaritmos)
 
 % =========================================================================
@@ -157,7 +166,8 @@ Cfg.SEED           = 0;
 %  │ var_1       │   1    │ Shock 2  │   h=0     │ CERO (no responde)      │
 %  └─────────────┴────────┴──────────┴───────────┴─────────────────────────┘
 
-n_vars = 4;          % ← EDITAR
+% ── Número de variables (Chat 19, Hallazgo 8: auto-derivado de VAR_ROLES) ─
+n_vars = sum(strcmp(Cfg.VAR_ROLES, 'endogenous'));
 
 Cfg.HORIZONS_RESTRICT = 0;    % ← EDITAR: 0 | [0 1 2] | 0:H
 Cfg.NS  = 1;                  % número de shocks identificados
@@ -191,11 +201,21 @@ Cfg.PLOT_IRFS        = false;
 Cfg.ITER_SHOW        = 100;
 Cfg.SUMMARY_HORIZONS = [0 1 4 8 12 20];    % ← EDITAR
 Cfg.CRED_BANDS       = [0.16 0.84];
-Cfg.SHOCK_IDX        = 1;               % escalar | vector | 'all' (Chat 19: ya soporta varios shocks)
+Cfg.SHOCK_IDX        = 1;               % escalar | vector | 'all' (Chat 19: ya soporta varios shocks;
+                                         %   IS ademas usa este mismo campo para elegir shocks en FEVD)
+Cfg.SHOCK_NAMES      = {'shock1', 'shock2'};  % ← EDITAR (Chat 19, Hallazgo 9): uno por shock declarado
 Cfg.IRF_TYPE         = 'irf';
 Cfg.IRF_NORM         = 'none';
 Cfg.MIN_ACCEPT_RATE  = 0.05;  % alerta si tasa de aceptación IS < este umbral
 
+% Cfg.FEVD_HORIZONS (← EDITAR, Chat 19, Hallazgo 6): horizontes en los que
+% se calcula la FEVD. Default si no lo defines: Cfg.INDEX_FEVD (un unico
+% horizonte). IS puede calcular varios shocks a la vez (ver Cfg.SHOCK_IDX
+% arriba, default 'all' si no lo defines) — util para el grafico de barras
+% apiladas de plot_fevd.m.
+Cfg.FEVD_HORIZONS = 1:Cfg.HORIZON;
+
 Cfg.TIMING_VARIANT   = [];
 Cfg.DERIV_SIDED      = 2;
+
 
