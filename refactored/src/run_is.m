@@ -15,9 +15,16 @@ function Results = run_is(PosteriorParams, Cfg)
 %     Cfg              struct de config/spec_*.m
 %
 %   Salida: Results struct con campos:
-%     .LtildeStruct   struct canonica 4D (via pack_ltilde.m)
-%                     Ltilde: [horizon+1, nvar, nvar, ne]
-%     .FEVD           [n x ne]   forecast error variance decomposition
+%     .LtildeStruct     struct canonica 4D (via pack_ltilde.m)
+%                       Ltilde: [horizon+1, nvar, nvar, ne]
+%     .FEVD             [n x n_fevd_shocks x n_fevd_h x ne]  forecast error
+%                       variance decomposition, para los shocks de
+%                       Cfg.SHOCK_IDX (default 'all') y los horizontes de
+%                       Cfg.FEVD_HORIZONS (default Cfg.INDEX_FEVD). Chat 19,
+%                       Hallazgo 6 — antes era [n x ne], siempre shock 1,
+%                       siempre un unico horizonte fijo.
+%     .FEVD_shock_idx   [1 x n_fevd_shocks] — shocks realmente calculados
+%     .FEVD_horizons    [1 x n_fevd_h] — horizontes realmente calculados
 %     .imp_w          [nd x 1]   pesos normalizados del IS
 %     .ne             scalar     effective sample size
 %     .Bdraws         {nd x 1}   draws de B (todos, antes de resampling)
@@ -44,6 +51,47 @@ conjugate = Cfg.CONJUGATE;
 S         = Cfg.S;
 Z         = Cfg.Z;
 horizons  = Cfg.HORIZONS_RESTRICT;   % horizonte(s) sobre los que se restringen
+
+%% ── FEVD: shocks y horizontes a calcular (Chat 19, Hallazgo 6) ───────────
+% Shocks: reutiliza Cfg.SHOCK_IDX (mismo campo que ya usan plot_irfs.m /
+% export_results.m para seleccionar shocks a graficar/exportar) — evita un
+% campo duplicado. DEFAULT (IS): 'all' (todos los n shocks), a diferencia
+% del comportamiento anterior a este chat (siempre Qdraw(:,1) fijo), para
+% que el grafico de barras apiladas de plot_fevd.m tenga sentido por
+% defecto. Con PFA no aplica (un solo shock por corrida, ver run_pfa.m).
+if isfield(Cfg, 'SHOCK_IDX') && ~isempty(Cfg.SHOCK_IDX)
+    fevd_shock_req = Cfg.SHOCK_IDX;
+else
+    fevd_shock_req = 'all';
+end
+if (ischar(fevd_shock_req) || isstring(fevd_shock_req)) && strcmpi(fevd_shock_req, 'all')
+    fevd_shock_idx = 1:n;
+else
+    fevd_shock_idx = fevd_shock_req(:)';
+end
+if any(fevd_shock_idx < 1) || any(fevd_shock_idx > n)
+    error('run_is:badFevdShockIdx', ...
+        'Cfg.SHOCK_IDX (para FEVD) fuera de rango [1,%d]: %s', n, mat2str(fevd_shock_idx));
+end
+n_fevd_shocks = numel(fevd_shock_idx);
+
+% Horizontes: Cfg.FEVD_HORIZONS (vector). DEFAULT (retrocompatible):
+% Cfg.INDEX_FEVD (escalar) — reproduce el unico horizonte que se
+% calculaba antes de este campo. Misma convencion de "t" que usaba
+% Cfg.INDEX_FEVD (ver variancedecomposition.m, helpfunctions/, no
+% modificado): t=0 produce division 0/0, por eso se exige t>=1.
+if isfield(Cfg, 'FEVD_HORIZONS') && ~isempty(Cfg.FEVD_HORIZONS)
+    fevd_horizons = Cfg.FEVD_HORIZONS(:)';
+else
+    fevd_horizons = index;
+end
+if any(fevd_horizons < 1)
+    error('run_is:badFevdHorizons', ...
+        ['Cfg.FEVD_HORIZONS debe contener enteros >= 1 (convencion de ' ...
+         'variancedecomposition.m: horizonte 0 produce division 0/0). ' ...
+         'Recibido: %s'], mat2str(fevd_horizons));
+end
+n_fevd_h = numel(fevd_horizons);
 
 %% ── Cronómetro ───────────────────────────────────────────────────────────
 t_start = tic;
@@ -196,7 +244,7 @@ n_irf_draws = min(ne, maxdraws);
 A0tilde    = zeros(n, n, n_irf_draws);
 Aplustilde = zeros(m, n, n_irf_draws);
 Ltilde     = zeros(horizon+1, n, n, n_irf_draws);
-FEVD       = zeros(n, n_irf_draws);
+FEVD       = zeros(n, n_fevd_shocks, n_fevd_h, n_irf_draws);
 
 %% ── Resampling IS (Paso 4 del Algoritmo 3) ───────────────────────────────
 for s = 1:n_irf_draws
@@ -230,8 +278,17 @@ for s = 1:n_irf_draws
     A_cell{p} = Aplus_s((p-1)*n+1:p*n, 1:end);
     F((p-1)*n+1:p*n, :) = [A_cell{p}/A0_s, extraF];
 
-    FEVD(:, s) = variancedecomposition(F', J, Sigmadraw, ...
-                     hSigmadraw' * Qdraw(:, 1), n, index);
+    % FIX (Chat 19, Hallazgo 6): antes solo se calculaba para Qdraw(:,1)
+    % (siempre el primer shock) y un unico horizonte (index). Misma
+    % formula, ahora en un loop sobre los shocks/horizontes resueltos
+    % arriba (fevd_shock_idx, fevd_horizons).
+    for jj = 1:n_fevd_shocks
+        sh = fevd_shock_idx(jj);
+        for hh_i = 1:n_fevd_h
+            FEVD(:, jj, hh_i, s) = variancedecomposition(F', J, Sigmadraw, ...
+                hSigmadraw' * Qdraw(:, sh), n, fevd_horizons(hh_i));
+        end
+    end
 
     % Guardar parametros estructurales resampleados
     A0tilde(:, :, s)    = reshape(structpara(1:n*n), n, n);
@@ -243,7 +300,7 @@ end
 A0tilde    = A0tilde(:, :, 1:s);
 Aplustilde = Aplustilde(:, :, 1:s);
 Ltilde     = Ltilde(:, :, :, 1:s);
-FEVD       = FEVD(:, 1:s);
+FEVD       = FEVD(:, :, :, 1:s);
 
 %% ── Empaquetar LtildeStruct ──────────────────────────────────────────────
 % IS: Ltilde es 4D [horizon+1, nvar, nvar, ne]
@@ -251,8 +308,10 @@ FEVD       = FEVD(:, 1:s);
 LtildeStruct = pack_ltilde(Ltilde, 'is', 1, horizon, n, size(Ltilde, 4));
 
 %% ── Empaquetar Results ───────────────────────────────────────────────────
-Results.LtildeStruct = LtildeStruct;
-Results.FEVD         = FEVD;
+Results.LtildeStruct   = LtildeStruct;
+Results.FEVD           = FEVD;             % [n x n_fevd_shocks x n_fevd_h x ne]
+Results.FEVD_shock_idx = fevd_shock_idx;
+Results.FEVD_horizons  = fevd_horizons;
 Results.imp_w        = imp_w;
 Results.ne           = ne;
 Results.Bdraws       = Bdraws;
@@ -279,6 +338,7 @@ if accept_rate_final < min_accept
 end
 
 end
+
 
 
 
