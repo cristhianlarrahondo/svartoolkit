@@ -1,34 +1,41 @@
 function export_results(Results, Dataset, Cfg)
-%EXPORT_RESULTS  Exporta resultados a Excel con 5 hojas estructuradas.
+%EXPORT_RESULTS  Exporta resultados a Excel con hojas estructuradas.
 %
 %   EXPORT_RESULTS(Results, Dataset, Cfg)
 %
 %   Genera un archivo .xlsx con las siguientes hojas:
-%     1. metadata            — spec, fecha, variables, modo, semilla
-%     2. irf_summary[_s<k>]  — UNA HOJA POR CADA SHOCK solicitado (shock x
-%                              response x horizon (0:HORIZON) | median | pX | pY).
-%                              Con un solo shock: 'irf_summary' (sin sufijo,
-%                              igual que antes de este chat). Con varios:
-%                              'irf_summary_s<k>' por cada shock k.
-%     3. cirf_summary[_s<k>] — idem para CIRFs (solo si IRF_TYPE incluye 'cirf')
-%     4. fevd_summary        — variable | median | pX | pY
-%     5. run_diagnostics     — ESS, tasa aceptacion, tiempo, nd
+%     1. metadata                — spec, fecha, variables, modo, semilla
+%     2. irf_summary[_s<k>]      — UNA HOJA POR CADA SHOCK solicitado,
+%                                  formato ANCHO (Chat 19, Hallazgo 11):
+%                                  columnas shock | horizon | <resp1>_median |
+%                                  <resp1>_p<lo> | <resp1>_p<hi> | <resp2>_median | ...
+%                                  una fila por horizonte, horizonte
+%                                  ascendente desde 0.
+%     3. cirf_summary[_s<k>]     — idem para CIRFs (solo si IRF_TYPE incluye 'cirf')
+%     4. fevd_summary[_v<k>]     — UNA HOJA POR CADA VARIABLE de respuesta
+%                                  (Chat 19, Hallazgo 6: FEVD es multi-shock
+%                                  y multi-horizonte ahora — ver run_pfa.m/
+%                                  run_is.m). Formato ancho: columnas
+%                                  horizon | <shock1>_median | <shock1>_p<lo> |
+%                                  <shock1>_p<hi> | <shock2>_median | ...
+%     5. run_diagnostics         — ESS, tasa aceptacion, tiempo, nd
 %
-%   CAMBIO (Chat 19, Hallazgo 4): Cfg.SHOCK_IDX ahora acepta escalar,
-%   vector, o 'all'. Antes, pasar un vector hacia que select_irfs.m
-%   lanzara un error de MATLAB ANTES de escribir cualquier hoja — por eso
-%   el archivo .xlsx no se generaba en absoluto (nada que ver con
-%   Cfg.SAVE_RESULTS, que no se usa en esta funcion). Ahora se genera UNA
-%   HOJA POR CADA SHOCK solicitado (tal como se aprobo originalmente) en
-%   vez de consolidar todos los shocks en una sola hoja con columna
-%   'shock' repetida.
+%   CAMBIO (Chat 19, Hallazgo 11): las hojas irf_summary/cirf_summary
+%   pasan de formato LARGO (una fila por shock x response x horizon) a
+%   formato ANCHO (una fila por horizonte, una variable de respuesta por
+%   bloque de columnas). Rompe compatibilidad de columnas con versiones
+%   anteriores del toolkit — cambio deliberado, aprobado explicitamente.
 %
-%   Nota: irf_summary y cirf_summary exportan TODOS los horizontes (0 a Cfg.HORIZON).
-%   Para tabla de solo horizontes clave usar print_summary con Cfg.SUMMARY_HORIZONS.
+%   CAMBIO (Chat 19, Hallazgo 6): fevd_summary pasa de una unica hoja
+%   variable|median|pX|pY (un solo shock, un solo horizonte) a una hoja
+%   POR VARIABLE con horizon como fila y un bloque de columnas por shock
+%   calculado (Results.FEVD_shock_idx) — mismo criterio de "una unidad de
+%   organizacion por variable" usado en plot_fevd.m.
 %
 %   Campos de Cfg usados:
 %     CRED_BANDS         (default [0.16 0.84])
 %     SHOCK_IDX          escalar | vector | 'all' (default LtildeStruct.shock_idx)
+%     SHOCK_NAMES        cell array de strings (default 'shock1','shock2',...)
 %     RESP_IDX           (default todos)
 %     IRF_TYPE           'irf' | 'cirf' | 'both'  (default 'irf')
 %     SPEC_NAME          string  (default 'spec')
@@ -57,6 +64,12 @@ if ~isfield(Results, 'FEVD') || isempty(Results.FEVD)
     error('export_results:missingFEVD', ...
         'export_results: Results.FEVD está ausente o vacío.');
 end
+if ~isfield(Results, 'FEVD_shock_idx') || ~isfield(Results, 'FEVD_horizons')
+    error('export_results:missingFevdMetadata', ...
+        ['export_results: Results.FEVD_shock_idx / Results.FEVD_horizons ' ...
+         'ausentes. ¿Vienen de una version de run_pfa.m/run_is.m anterior ' ...
+         'al Chat 19?']);
+end
 
 %% ── Defaults de Cfg ──────────────────────────────────────────────────────
 cred_bands = [0.16 0.84];
@@ -83,6 +96,11 @@ if isfield(Cfg, 'SEED'), seed = Cfg.SEED; end
 mode_str = 'unknown';
 if isfield(Cfg, 'MODE') && ~isempty(Cfg.MODE)
     mode_str = lower(Cfg.MODE);
+end
+
+shock_names = {};
+if isfield(Cfg, 'SHOCK_NAMES') && ~isempty(Cfg.SHOCK_NAMES)
+    shock_names = Cfg.SHOCK_NAMES;
 end
 
 %% ── Paths ────────────────────────────────────────────────────────────────
@@ -121,7 +139,7 @@ end
 
 %% ── Extraer IRFs — todos los horizontes, todos los shocks solicitados ───
 [irfs_by_shock, label_shock_arr, label_resp, shock_idx_resolved] = ...
-    select_irfs(LtildeStruct, shock_idx_req, response_idx);
+    select_irfs(LtildeStruct, shock_idx_req, response_idx, shock_names);
 nresp    = numel(response_idx);
 n_shocks = numel(shock_idx_resolved);
 
@@ -130,36 +148,58 @@ h_all  = 0:horizon_max;          % 0-based
 h_idx  = h_all + 1;              % 1-based en el array
 nh     = numel(h_all);
 
-%% ── Construir nombres de columnas de bandas ──────────────────────────────
-band_col_names = cell(1, n_bands * 2);
-for bb = 1:n_bands
-    band_col_names{(bb-1)*2 + 1} = sprintf('p%.0f', cred_bands(bb,1) * 100);
-    band_col_names{(bb-1)*2 + 2} = sprintf('p%.0f', cred_bands(bb,2) * 100);
+%% ── Helper: nombres de columnas por bloque de "entidad" (respuesta/shock) ─
+function col_names = build_block_col_names(entity_names, cred_bands_in, n_bands_in)
+    n_entities = numel(entity_names);
+    col_names  = cell(1, n_entities * (1 + 2*n_bands_in));
+    kk_col = 1;
+    for ee = 1:n_entities
+        safe_e = regexprep(entity_names{ee}, '[^a-zA-Z0-9_]', '_');
+        col_names{kk_col} = sprintf('%s_median', safe_e); kk_col = kk_col + 1;
+        for bb = 1:n_bands_in
+            col_names{kk_col} = sprintf('%s_p%.0f', safe_e, cred_bands_in(bb,1)*100); kk_col = kk_col + 1;
+            col_names{kk_col} = sprintf('%s_p%.0f', safe_e, cred_bands_in(bb,2)*100); kk_col = kk_col + 1;
+        end
+    end
 end
 
-irf_col_names  = [{'shock', 'response', 'horizon', 'median'}, band_col_names];
-fevd_col_names = [{'variable', 'median'}, band_col_names];
-
-%% ── Helper: construir tabla de IRFs (un shock) ───────────────────────────
-function rows = build_irf_rows(irfs_arr, label_shock_in, label_resp_in, ...
-                                h_all_in, h_idx_in, nh_in, nresp_in, ...
-                                cred_bands_in, n_bands_in)
-    n_cols = 4 + n_bands_in * 2;
-    rows   = cell(nh_in * nresp_in, n_cols);
-    row_k  = 1;
+%% ── Helper: construir tabla ANCHA de IRFs/CIRFs (un shock, todas las resp) ─
+function rows = build_irf_rows_wide(irfs_arr, label_shock_in, ...
+                                     h_all_in, h_idx_in, nh_in, nresp_in, ...
+                                     cred_bands_in, n_bands_in)
+    n_data_cols = nresp_in * (1 + 2*n_bands_in);
+    rows = cell(nh_in, 2 + n_data_cols);
     for ii = 1:nh_in
+        rows{ii, 1} = label_shock_in;
+        rows{ii, 2} = h_all_in(ii);
+        col = 3;
         for jj = 1:nresp_in
-            sl    = irfs_arr(h_idx_in(ii), jj, :);
-            med_v = quantile(sl(:), 0.50);
-            rows{row_k, 1} = label_shock_in;
-            rows{row_k, 2} = label_resp_in{jj};
-            rows{row_k, 3} = h_all_in(ii);
-            rows{row_k, 4} = med_v;
+            sl = irfs_arr(h_idx_in(ii), jj, :);
+            rows{ii, col} = quantile(sl(:), 0.50); col = col + 1;
             for bb = 1:n_bands_in
-                rows{row_k, 4 + (bb-1)*2 + 1} = quantile(sl(:), cred_bands_in(bb, 1));
-                rows{row_k, 4 + (bb-1)*2 + 2} = quantile(sl(:), cred_bands_in(bb, 2));
+                rows{ii, col} = quantile(sl(:), cred_bands_in(bb,1)); col = col + 1;
+                rows{ii, col} = quantile(sl(:), cred_bands_in(bb,2)); col = col + 1;
             end
-            row_k = row_k + 1;
+        end
+    end
+end
+
+%% ── Helper: construir tabla ANCHA de FEVD (una variable, todos los shocks) ─
+function rows = build_fevd_rows_wide(FEVD_in, v_idx_in, ...
+                                      fevd_horizons_in, n_h_in, n_shocks_in, ...
+                                      cred_bands_in, n_bands_in)
+    n_data_cols = n_shocks_in * (1 + 2*n_bands_in);
+    rows = cell(n_h_in, 1 + n_data_cols);
+    for hh_i = 1:n_h_in
+        rows{hh_i, 1} = fevd_horizons_in(hh_i);
+        col = 2;
+        for jj = 1:n_shocks_in
+            sl = FEVD_in(v_idx_in, jj, hh_i, :);
+            rows{hh_i, col} = quantile(sl(:), 0.50); col = col + 1;
+            for bb = 1:n_bands_in
+                rows{hh_i, col} = quantile(sl(:), cred_bands_in(bb,1)); col = col + 1;
+                rows{hh_i, col} = quantile(sl(:), cred_bands_in(bb,2)); col = col + 1;
+            end
         end
     end
 end
@@ -167,8 +207,6 @@ end
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 1: metadata
 %% ══════════════════════════════════════════════════════════════════════════
-% Precomputar los nombres de hoja que se van a generar (una por shock),
-% solo para documentarlos en la hoja de metadata.
 irf_sheet_names_preview  = cell(1, n_shocks);
 cirf_sheet_names_preview = cell(1, n_shocks);
 for j = 1:n_shocks
@@ -199,26 +237,24 @@ meta_data = {
     'horizons_export',  sprintf('0:%d (todos)', horizon_max);
     'hojas_irf',        strjoin(irf_sheet_names_preview, ', ');
     'hojas_cirf',       strjoin(cirf_sheet_names_preview, ', ');
+    'fevd_shock_idx',   mat2str(Results.FEVD_shock_idx);
+    'fevd_horizons',    mat2str(Results.FEVD_horizons);
 };
 T_meta = cell2table(meta_data, 'VariableNames', {'campo', 'valor'});
 writetable(T_meta, xlsx_path, 'Sheet', 'metadata', 'WriteVariableNames', true);
 
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 2: irf_summary — UNA HOJA POR CHOQUE (Chat 19, Hallazgo 4: "una
-%  figura/hoja por choque", tal como se aprobó — no se consolidan los
-%  shocks en una sola hoja).
-%
-%  Con un solo shock solicitado (caso mas comun, y el unico que existia
-%  antes de este chat): nombre de hoja SIN sufijo ('irf_summary'), igual
-%  que antes — no rompe archivos/flujos existentes.
-%  Con varios shocks: 'irf_summary_s<k>' por cada shock k solicitado.
+%  HOJA 2: irf_summary — UNA HOJA POR CHOQUE, formato ANCHO (Hallazgo 11)
 %% ══════════════════════════════════════════════════════════════════════════
+resp_col_names = build_block_col_names(label_resp, cred_bands, n_bands);
+irf_col_names  = [{'shock', 'horizon'}, resp_col_names];
+
 irf_sheet_names = cell(1, n_shocks);
 if ismember(irf_type, {'irf', 'both'})
     for j = 1:n_shocks
         sidx_j = shock_idx_resolved(j);
-        rows_j = build_irf_rows(irfs_by_shock{j}, label_shock_arr{j}, label_resp, ...
-                                 h_all, h_idx, nh, nresp, cred_bands, n_bands);
+        rows_j = build_irf_rows_wide(irfs_by_shock{j}, label_shock_arr{j}, ...
+                                      h_all, h_idx, nh, nresp, cred_bands, n_bands);
         T_irf_j = cell2table(rows_j, 'VariableNames', irf_col_names);
         if n_shocks == 1
             sheet_name = 'irf_summary';
@@ -242,8 +278,8 @@ if ismember(irf_type, {'cirf', 'both'})
     for j = 1:n_shocks
         sidx_j  = shock_idx_resolved(j);
         cirfs_j = compute_cirfs(irfs_by_shock{j});
-        rows_j  = build_irf_rows(cirfs_j, label_shock_arr{j}, label_resp, ...
-                                  h_all, h_idx, nh, nresp, cred_bands, n_bands);
+        rows_j  = build_irf_rows_wide(cirfs_j, label_shock_arr{j}, ...
+                                       h_all, h_idx, nh, nresp, cred_bands, n_bands);
         T_cirf_j = cell2table(rows_j, 'VariableNames', irf_col_names);
         if n_shocks == 1
             sheet_name = 'cirf_summary';
@@ -260,28 +296,34 @@ else
 end
 
 %% ══════════════════════════════════════════════════════════════════════════
-%  HOJA 4: fevd_summary
+%  HOJA 4: fevd_summary — UNA HOJA POR VARIABLE (Chat 19, Hallazgo 6)
 %% ══════════════════════════════════════════════════════════════════════════
-% NOTA DE ALCANCE (Chat 19): Results.FEVD refleja el shock identificado
-% por run_pfa/run_is (en IS, siempre la primera columna de Q — ver
-% run_is.m), NO es indexable por Cfg.SHOCK_IDX. Esta hoja no cambia en
-% este chat; el soporte multi-shock de este chat es exclusivo de IRF/CIRF.
-FEVD     = Results.FEVD;
-FEVD_sel = FEVD(response_idx, :);
+FEVD           = Results.FEVD;              % [nvar x n_fevd_shocks x n_fevd_h x ndraws]
+fevd_shock_idx = Results.FEVD_shock_idx(:)';
+fevd_horizons  = Results.FEVD_horizons(:)';
+n_fevd_shocks  = numel(fevd_shock_idx);
+n_fevd_h       = numel(fevd_horizons);
 
-n_fevd_cols = 2 + n_bands * 2;
-rows_fevd   = cell(nresp, n_fevd_cols);
-for jj = 1:nresp
-    sl    = FEVD_sel(jj, :)';
-    rows_fevd{jj, 1} = label_resp{jj};
-    rows_fevd{jj, 2} = quantile(sl, 0.50);
-    for bb = 1:n_bands
-        rows_fevd{jj, 2 + (bb-1)*2 + 1} = quantile(sl, cred_bands(bb, 1));
-        rows_fevd{jj, 2 + (bb-1)*2 + 2} = quantile(sl, cred_bands(bb, 2));
-    end
+fevd_shock_names = cell(1, n_fevd_shocks);
+for jj = 1:n_fevd_shocks
+    fevd_shock_names{jj} = resolve_shock_name(shock_names, fevd_shock_idx(jj));
 end
-T_fevd = cell2table(rows_fevd, 'VariableNames', fevd_col_names);
-writetable(T_fevd, xlsx_path, 'Sheet', 'fevd_summary', 'WriteVariableNames', true);
+fevd_col_names = [{'horizon'}, build_block_col_names(fevd_shock_names, cred_bands, n_bands)];
+
+fevd_sheet_names = cell(1, nresp);
+for kk = 1:nresp
+    v_idx  = response_idx(kk);
+    rows_k = build_fevd_rows_wide(FEVD, v_idx, fevd_horizons, n_fevd_h, ...
+                                   n_fevd_shocks, cred_bands, n_bands);
+    T_fevd_k = cell2table(rows_k, 'VariableNames', fevd_col_names);
+    if nresp == 1
+        sheet_name = 'fevd_summary';
+    else
+        sheet_name = sprintf('fevd_summary_v%d', v_idx);
+    end
+    fevd_sheet_names{kk} = sheet_name;
+    writetable(T_fevd_k, xlsx_path, 'Sheet', sheet_name, 'WriteVariableNames', true);
+end
 
 %% ══════════════════════════════════════════════════════════════════════════
 %  HOJA 5: run_diagnostics
@@ -317,9 +359,12 @@ T_diag = cell2table(diag_data, 'VariableNames', {'metrica', 'valor'});
 writetable(T_diag, xlsx_path, 'Sheet', 'run_diagnostics', 'WriteVariableNames', true);
 
 fprintf('export_results: archivo guardado en:\n  %s\n', xlsx_path);
-fprintf('  Hojas: metadata | %s | %s | fevd_summary | run_diagnostics\n', ...
-    strjoin(irf_sheet_names, ' | '), strjoin(cirf_sheet_names, ' | '));
+fprintf('  Hojas: metadata | %s | %s | %s | run_diagnostics\n', ...
+    strjoin(irf_sheet_names, ' | '), strjoin(cirf_sheet_names, ' | '), ...
+    strjoin(fevd_sheet_names, ' | '));
 fprintf('  IRFs exportados: horizontes 0:%d x %d respuestas x %d shock(s) [%s]\n', ...
     horizon_max, nresp, n_shocks, num2str(shock_idx_resolved));
+fprintf('  FEVD exportada: %d variable(s) x %d shock(s) x %d horizonte(s)\n', ...
+    nresp, n_fevd_shocks, n_fevd_h);
 
 end

@@ -177,6 +177,20 @@ if nargin >= 2 && ~isempty(Dataset) && isfield(Dataset, 'nvar')
     end
 end
 
+%% ── Validación opcional: Cfg.VARS vs Cfg.VAR_ROLES (Chat 19, Hallazgo 7) ─
+%  Si ambos estan definidos, deben tener el mismo largo (mismo orden,
+%  ver load_data.m). Es un chequeo temprano y directo — sin el, el error
+%  real solo aparece dentro de load_data.m con un mensaje menos util.
+if isfield(Cfg, 'VARS') && ~isempty(Cfg.VARS) && isfield(Cfg, 'VAR_ROLES') && ~isempty(Cfg.VAR_ROLES)
+    if numel(Cfg.VARS) ~= numel(Cfg.VAR_ROLES)
+        error('validate_cfg:varsRolesMismatch', ...
+            ['[validate_cfg] Cfg.VARS tiene %d elemento(s) pero Cfg.VAR_ROLES ' ...
+             'tiene %d. Deben coincidir en numero y orden (ver ' ...
+             'README_cfg_reference.md, campo VARS).'], ...
+            numel(Cfg.VARS), numel(Cfg.VAR_ROLES));
+    end
+end
+
 %% ── Campos adicionales para MODE='is' ───────────────────────────────────
 if strcmpi(Cfg.MODE, 'is')
     is_extra = {'MAX_IS_DRAWS', 'CONJUGATE'};
@@ -204,5 +218,6 @@ fprintf('[validate_cfg] OK — Cfg válida: MODE=''%s'', ND=%g, NLAG=%d, HORIZON
     Cfg.MODE, Cfg.ND, Cfg.NLAG, Cfg.HORIZON);
 
 end
+
 
 

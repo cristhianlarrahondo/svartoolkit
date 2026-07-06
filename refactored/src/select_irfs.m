@@ -1,8 +1,17 @@
-function [irfs_by_shock, labels_shock, labels_response, shock_idx] = select_irfs(LtildeStruct, shock_idx, response_idx)
+function [irfs_by_shock, labels_shock, labels_response, shock_idx] = select_irfs(LtildeStruct, shock_idx, response_idx, shock_names)
 %SELECT_IRFS  Extrae uno o varios subconjuntos shock-response de LtildeStruct.
 %
 %   [irfs_by_shock, labels_shock, labels_response, shock_idx] = ...
 %       SELECT_IRFS(LtildeStruct, shock_idx, response_idx)
+%       SELECT_IRFS(LtildeStruct, shock_idx, response_idx, shock_names)
+%
+%   CAMBIO (Chat 19, Hallazgo 9): nuevo argumento opcional shock_names
+%   (normalmente Cfg.SHOCK_NAMES). ANTES, labels_shock reutilizaba el
+%   label de la VARIABLE con el mismo indice que el shock — una
+%   coincidencia casual de BNW (cada shock restringido se asocia 1:1 a una
+%   variable), no un comportamiento general. Ahora labels_shock usa
+%   shock_names{idx} si esta definido, y si no, cae a 'shock<idx>' (ver
+%   resolve_shock_name.m) — NUNCA el label de una variable.
 %
 %   CAMBIO (Chat 19, Hallazgo 4): shock_idx ahora acepta escalar, vector,
 %   o el string 'all' (todos los shocks identificados: 1:nvar). Antes
@@ -48,6 +57,9 @@ function [irfs_by_shock, labels_shock, labels_response, shock_idx] = select_irfs
 nvar    = LtildeStruct.nvar;
 horizon = LtildeStruct.horizon;
 
+if nargin < 4
+    shock_names = {};
+end
 if nargin < 3 || isempty(response_idx)
     response_idx = 1:nvar;
 end
@@ -77,7 +89,7 @@ if any(shock_idx < 1) || any(shock_idx > nvar)
         'shock_idx contiene indices fuera de rango [1, %d].', nvar);
 end
 
-%% ── Labels de respuesta (no dependen del shock) ──────────────────────────
+%% ── Labels de respuesta (variables; no dependen del shock) ──────────────
 if isfield(LtildeStruct, 'var_labels') && ~isempty(LtildeStruct.var_labels)
     all_labels      = LtildeStruct.var_labels;
     labels_response = all_labels(response_idx(response_idx <= numel(all_labels)));
@@ -86,12 +98,9 @@ if isfield(LtildeStruct, 'var_labels') && ~isempty(LtildeStruct.var_labels)
             labels_response{k} = sprintf('Var %d', response_idx(k));
         end
     end
-    has_labels = true;
 else
-    all_labels      = {};
     labels_response = arrayfun(@(i) sprintf('Var %d', i), response_idx, ...
                                'UniformOutput', false);
-    has_labels = false;
 end
 
 %% ── Extraer draws por shock, segun modo ──────────────────────────────────
@@ -123,11 +132,8 @@ for j = 1:n_shocks
                 'Modo desconocido en LtildeStruct.mode: ''%s''.', LtildeStruct.mode);
     end
 
-    if has_labels
-        labels_shock{j} = all_labels{min(sidx, numel(all_labels))};
-    else
-        labels_shock{j} = sprintf('Shock %d', sidx);
-    end
+    labels_shock{j} = resolve_shock_name(shock_names, sidx);
 end
 
 end
+

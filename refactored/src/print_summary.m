@@ -54,6 +54,11 @@ if isfield(Cfg, 'RESP_IDX') && ~isempty(Cfg.RESP_IDX)
     response_idx = Cfg.RESP_IDX;
 end
 
+shock_names = {};
+if isfield(Cfg, 'SHOCK_NAMES') && ~isempty(Cfg.SHOCK_NAMES)
+    shock_names = Cfg.SHOCK_NAMES;
+end
+
 %% ── Adjuntar var_labels a LtildeStruct ─────────────────────────────────
 endo_mask = strcmp(Dataset.var_roles, 'endogenous');
 all_labels = Dataset.var_labels(endo_mask);
@@ -61,7 +66,7 @@ LtildeStruct.var_labels = all_labels;
 
 %% ── Extraer IRFs de TODOS los shocks solicitados ─────────────────────────
 [irfs_by_shock, label_shock_arr, label_resp, shock_idx_resolved] = ...
-    select_irfs(LtildeStruct, shock_idx_req, response_idx);
+    select_irfs(LtildeStruct, shock_idx_req, response_idx, shock_names);
 
 horizon_max = LtildeStruct.horizon;
 n_shocks    = numel(shock_idx_resolved);
@@ -140,3 +145,4 @@ for j = 1:n_shocks
 end
 
 end
+

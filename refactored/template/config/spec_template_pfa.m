@@ -22,6 +22,17 @@ cfg_dir       = fileparts(mfilename('fullpath'));   % .../mi_caso/config/
 ex_dir        = fileparts(cfg_dir);                 % .../mi_caso/
 Cfg.DATA_FILE = fullfile(ex_dir, 'data', 'data_micaso.xlsx');  % ← EDITAR nombre
 
+% Cfg.VARS (Chat 19, Hallazgo 7 — OPCIONAL): selecciona/reordena columnas
+% de la hoja "data" por NOMBRE (deben coincidir exactamente con los
+% encabezados de tu xlsx), sin necesidad de editar el Excel. Si lo dejas
+% vacio/comentado, se usan TODAS las columnas en el orden del Excel.
+% Cfg.VARS = {'prod_growth', 'act_growth', 'price_growth', 'inv_growth'};  % ← EDITAR (opcional)
+
+% Cfg.VAR_ROLES (← EDITAR): mismo largo y orden que Cfg.VARS (si lo
+% definiste) o que las columnas de la hoja "data" (si no). Determina
+% cuales entran al VAR como endogenas — nunca se leen del Excel.
+Cfg.VAR_ROLES = {'endogenous','endogenous','endogenous','endogenous'};  % ← EDITAR
+
 % Factor de escala aplicado a los datos al cargarlos.
 %   1   → datos ya están en la unidad correcta (%, log-dif, etc.)
 %   100 → datos en logaritmos sin escalar (como en BNW)
@@ -168,8 +179,10 @@ Cfg.SEED           = 0;        % semilla rng (0 = reproducible)
 %  Ver también build_restriction_row.m para más ejemplos.
 %  ─────────────────────────────────────────────────────────────────────────
 
-% ── Número de variables (ajustar según tu dataset) ──────────────────────
-n_vars = 4;          % ← EDITAR: número de variables endógenas
+% ── Número de variables (Chat 19, Hallazgo 8: auto-derivado de VAR_ROLES,
+%    ya no se escribe a mano — evita el desajuste que causaba errores de
+%    dimension al cambiar de spec) ─────────────────────────────────────
+n_vars = sum(strcmp(Cfg.VAR_ROLES, 'endogenous'));
 
 % ── Horizonte de las restricciones ──────────────────────────────────────
 Cfg.HORIZONS_RESTRICT = 0;    % ← EDITAR: 0 | [0 1 2] | 0:H
@@ -212,10 +225,21 @@ Cfg.ITER_SHOW        = 100;
 Cfg.SUMMARY_HORIZONS = [0 1 4 8 12 20];  % ← EDITAR horizontes para print_summary
 Cfg.CRED_BANDS       = [0.16 0.84];      % bandas de credibilidad [16%, 84%]
 Cfg.SHOCK_IDX        = 1;               % escalar | vector | 'all' (Chat 19: ya soporta varios shocks)
+Cfg.SHOCK_NAMES      = {'shock1'};       % ← EDITAR (Chat 19, Hallazgo 9): nombres de tus shocks para
+                                         %   leyendas/titulos/nombres de archivo. Default si no lo
+                                         %   defines: 'shock1', 'shock2', ... (resolve_shock_name.m)
 Cfg.IRF_TYPE         = 'irf';           % 'irf' | 'cirf' | 'both'
 Cfg.IRF_NORM         = 'none';          % 'none' | '1sd' | 'unit' | 'own_unit'
+
+% Cfg.FEVD_HORIZONS (← EDITAR, Chat 19, Hallazgo 6): horizontes en los que
+% se calcula la FEVD del shock identificado por PFA (un solo shock por
+% corrida — ver limitacion documentada arriba). Default si no lo defines:
+% Cfg.INDEX_FEVD (un unico horizonte). Para la curva completa de
+% plot_fevd.m, usa algo como 1:Cfg.HORIZON.
+Cfg.FEVD_HORIZONS = 1:Cfg.HORIZON;
 
 % Parámetros internos (no modificar)
 Cfg.TIMING_VARIANT = [];
 Cfg.DERIV_SIDED    = 2;
+
 

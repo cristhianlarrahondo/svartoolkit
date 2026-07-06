@@ -15,8 +15,9 @@ tiene un default seguro si el campo no está definido.
 | Campo | Tipo | Valores válidos | Default | Efecto | Usado en |
 |---|---|---|---|---|---|
 | `DATA_FILE` | char | ruta absoluta a `.xlsx` | — (obligatorio; `''` usa `data/data_bnw.xlsx` legado) | Archivo que lee `load_data.m` | `load_data.m` |
+| `VARS` | cell de char | nombres de columnas de la hoja `data`, en el orden deseado | todas las columnas, orden del Excel, si no se define | Selecciona/reordena columnas ANTES de aplicar `VAR_ROLES` (que debe tener el mismo largo y orden). Permite probar specs con menos/más variables sin editar el Excel (Chat 19, Hallazgo 7) | `load_data.m` |
 | `SCALE_FACTOR` | double escalar | > 0 | — (obligatorio) | Multiplica `Dataset.Y_raw` antes de construir Y/X. `100` para pasar log-niveles a log-porcentajes; `1` si los datos ya están en la unidad correcta | `build_posterior.m` |
-| `VAR_ROLES` | cell de char | `'endogenous'` \| `'exogenous'`, mismo largo que columnas de la hoja `data` | todas `'endogenous'` si no se define | Determina qué columnas entran al VAR. Roles **nunca** se leen del Excel | `load_data.m` |
+| `VAR_ROLES` | cell de char | `'endogenous'` \| `'exogenous'`, mismo largo que `VARS` (si se definió) o que columnas de la hoja `data` | todas `'endogenous'` si no se define | Determina qué columnas entran al VAR. Roles **nunca** se leen del Excel | `load_data.m` |
 | `DUMMIES` | struct array | ver `build_dummies.m` (tipos: `oneoff`, `pulse`, `step`, `seasonal`) | `[]` (sin dummies) | Agrega columnas exógenas adicionales a `xt`, al final (después de la constante) | `build_posterior.m`, `build_dummies.m` |
 | `TRANSFORMS` | — | — | — | **No implementado.** Se evaluó en el Chat 13 (Lote 6) y se descartó deliberadamente: las transformaciones de series (log, diferencias, etc.) son responsabilidad del usuario **antes** de construir el `.xlsx`. Si ves este campo mencionado en documentación antigua, no tiene efecto en el código actual. | — |
 
@@ -27,7 +28,7 @@ tiene un default seguro si el campo no está definido.
 | `NLAG` | double escalar | entero > 0 | — (obligatorio) | Número de rezagos `p` del VAR | `build_posterior.m` |
 | `NEX` | double escalar | `0` \| `1` | — (obligatorio) | `1` = incluir constante en `xt`; `0` = sin constante | `build_posterior.m` |
 | `HORIZON` | double escalar | entero > 0 | — (obligatorio) | Horizonte máximo para el cual se calculan IRFs | `run_pfa.m`, `run_is.m` |
-| `INDEX_FEVD` | double escalar | entero, `≤ HORIZON` | — (obligatorio) | Horizonte al cual se calcula la FEVD | `run_pfa.m`, `run_is.m` |
+| `INDEX_FEVD` | double escalar | entero, `≤ HORIZON` | — (obligatorio) | Horizonte usado como DEFAULT de `Cfg.FEVD_HORIZONS` si este no se define (retrocompatibilidad) | `run_pfa.m`, `run_is.m` |
 | `PRIOR` | struct | `PRIOR.type` ∈ `{'diffuse','minnesota','sims_zha','niw_custom','natural_conjugate'}` + hiperparámetros según el tipo (ver `build_posterior.m`) | `struct('type','diffuse')` si no se define | Tipo de prior NIW usado para construir el posterior | `build_posterior.m` |
 
 ## 3. Muestreo
@@ -49,6 +50,7 @@ tiene un default seguro si el campo no está definido.
 | `NS` | double escalar | entero ≥ 1 | — (obligatorio, pero **vestigial**: solo lo usa `run_timing.m`; `run_pfa.m`/`run_is.m` no lo leen) | Se mantiene por compatibilidad con specs de timing | `run_timing.m` |
 | `S` | cell(n_vars,1) | cada `S{k}` es `[] ` o matriz `[n_filas x (numel(HORIZONS_RESTRICT)*n_vars)]`, construida con `build_restriction_row.m` | — (obligatorio) | Restricciones de **signo**. **REGLA CRÍTICA (Chat 19, Hallazgo 1): SIEMPRE `cell(n_vars,1)`, sin importar cuántos shocks tengan restricción declarada — nunca `cell(n_shocks,1)`.** | `SetupInfo.m`, `run_pfa.m`, `run_is.m`, `structural_restrictions_generic.m` |
 | `Z` | cell(n_vars,1) | ídem `S`, pero para restricciones de **cero**. En PFA debe ir todo vacío (`cell(n_vars,1)` con celdas `[]`) | — (obligatorio) | Restricciones de cero (solo tienen efecto real en `MODE='is'`) | ídem `S` |
+| `FEVD_HORIZONS` | double vector | enteros `≥ 1` (horizonte `0` produce división 0/0 en `variancedecomposition.m`, no modificado) | `Cfg.INDEX_FEVD` (escalar) si no se define | Horizontes en los que se calcula la FEVD (Chat 19, Hallazgo 6). **Es un campo DE ESTIMACIÓN**: cambiarlo requiere volver a correr `run_pfa`/`run_is` — no está en `get_output_fields.m` aunque se "sienta" como parámetro de presentación | `run_pfa.m`, `run_is.m` |
 
 ## 5. Nombre y guardado
 
@@ -66,7 +68,8 @@ tiene un default seguro si el campo no está definido.
 | `PLOT_IRFS` | logical | `true` \| `false` | — | Controla si el pipeline llama `plot_irfs.m` (el pipeline decide, no `plot_irfs.m` mismo) | pipelines |
 | `SUMMARY_HORIZONS` | double vector 0-based | horizontes dentro de `[0, HORIZON]` | `[0 4 8 20 40]` | Horizontes mostrados en la tabla de consola | `print_summary.m` |
 | `CRED_BANDS` | double `[N x 2]` | cuantiles en `(0,1)`, cada fila `[p_lo p_hi]` | `[0.16 0.84]` | Bandas de credibilidad graficadas/exportadas. `plot_fevd.m` solo usa la primera fila | `plot_irfs.m`, `plot_fevd.m`, `export_results.m`, `print_summary.m` |
-| `SHOCK_IDX` | double escalar \| vector \| `'all'` | `1..n_vars` | `LtildeStruct.shock_idx` (el shock realmente estimado) | Shock(s) a graficar/exportar/resumir. **Desde el Chat 19 soporta vector y `'all'`** — antes solo aceptaba escalar. `plot_irfs.m` genera **una figura por shock**; `export_results.m` genera **una hoja `irf_summary_s<k>`/`cirf_summary_s<k>` por shock** (con un solo shock, los nombres de hoja quedan sin sufijo, igual que antes de este chat) | `select_irfs.m` (vía `plot_irfs.m`, `export_results.m`, `print_summary.m`) |
+| `SHOCK_IDX` | double escalar \| vector \| `'all'` | `1..n_vars` | `LtildeStruct.shock_idx` (el shock realmente estimado); en IS, `'all'` para el cálculo de FEVD | Shock(s) a graficar/exportar/resumir. **Desde el Chat 19 soporta vector y `'all'`** — antes solo aceptaba escalar. `plot_irfs.m` genera **una figura por shock**; `export_results.m` genera **una hoja `irf_summary_s<k>`/`cirf_summary_s<k>` por shock** (con un solo shock, los nombres de hoja quedan sin sufijo). En `MODE='is'`, este mismo campo **también** selecciona qué shocks entran al cálculo de FEVD (Chat 19, Hallazgo 6) — default `'all'` ahí, a diferencia de IRF/CIRF cuyo default es el shock estimado | `select_irfs.m` (vía `plot_irfs.m`, `export_results.m`, `print_summary.m`); `run_is.m` (FEVD) |
+| `SHOCK_NAMES` | cell de char | strings, indexados por posición de shock (`SHOCK_NAMES{k}` = nombre del shock k) | `'shock1'`, `'shock2'`, ... (vía `resolve_shock_name.m`) si no se define | Nombre de cada shock para leyendas, títulos y nombres de archivo de figuras/hojas de Excel (Chat 19, Hallazgo 9). **Antes de este chat, `select_irfs.m` reutilizaba por error el label de la VARIABLE con el mismo índice que el shock** — ya no ocurre | `resolve_shock_name.m` (vía `select_irfs.m`, `plot_irfs.m`, `plot_fevd.m`, `export_results.m`) |
 | `RESP_IDX` | double vector | `1..n_vars` | todas las variables | Subconjunto de variables de respuesta a graficar/exportar | `select_irfs.m`, `plot_fevd.m`, `export_results.m` |
 | `IRF_TYPE` | char | `'irf'` \| `'cirf'` \| `'both'` | `'irf'` | Si se grafican/exportan IRFs, CIRFs (acumuladas), o ambas | `plot_irfs.m`, `export_results.m` |
 | `IRF_NORM` | char | `'none'` \| `'1sd'` \| `'unit'` \| `'own_unit'` | `'none'` | Tipo de normalización draw-by-draw aplicada antes de graficar | `plot_irfs.m` (vía `normalize_irfs.m`) |
@@ -90,15 +93,18 @@ spec sin volver a estimar (ver `src/refresh_cfg_output.m` y la Sección 5 de
 `pipeline_template.m`/`pipeline_bnw.m`):
 
 ```
-SUMMARY_HORIZONS, CRED_BANDS, SHOCK_IDX, RESP_IDX, IRF_TYPE, IRF_NORM,
-NORM_SHOCK_IDX, NORM_VAR, NORM_HORIZON, NORM_VALUE, PLOT_IRFS,
+SUMMARY_HORIZONS, CRED_BANDS, SHOCK_IDX, SHOCK_NAMES, RESP_IDX, IRF_TYPE,
+IRF_NORM, NORM_SHOCK_IDX, NORM_VAR, NORM_HORIZON, NORM_VALUE, PLOT_IRFS,
 FIG_SUFFIX, OUTPUT_DIR
 ```
 
-Todo lo demás (`DATA_FILE`, `NLAG`, `HORIZON`, `MODE`, `ND`, `S`, `Z`,
-`SEED`, `HORIZONS_RESTRICT`, `PRIOR`, `DUMMIES`, ...) es "de estimación": si
-lo editas, necesitas volver a correr `build_posterior`/`run_pfa`/`run_is`
-para que el cambio tenga efecto.
+Todo lo demás (`DATA_FILE`, `VARS`, `NLAG`, `HORIZON`, `MODE`, `ND`, `S`, `Z`,
+`SEED`, `HORIZONS_RESTRICT`, `FEVD_HORIZONS`, `PRIOR`, `DUMMIES`, ...) es "de
+estimación": si lo editas, necesitas volver a correr
+`build_posterior`/`run_pfa`/`run_is` para que el cambio tenga efecto.
+Ver `src/get_output_fields.m` para la nota completa de por qué
+`Cfg.FEVD_HORIZONS` NO está en esta lista pese a "sentirse" como un
+parámetro de presentación (Chat 19, Hallazgo 6).
 
 ## Ver también
 
@@ -107,3 +113,4 @@ para que el cambio tenga efecto.
 - `src/print_restriction_matrix.m` — vista de conjunto de las restricciones declaradas
 - `src/get_output_fields.m` / `src/refresh_cfg_output.m` — separación estimación/output
 - `validate/validate_cfg.m` — validación automática de `Cfg` antes de estimar
+

@@ -28,6 +28,10 @@ Tu archivo `.xlsx` debe tener **dos hojas**:
 - `role`: siempre `endogenous` para variables del VAR
 - `label`: nombre largo para gráficas y tablas
 - El **orden de las filas** determina los índices (var_1, var_2, ...) usados en las restricciones
+- Si tu Excel trae MÁS variables de las que quieres usar en un caso de
+  estudio particular, no hace falta editar el Excel: usa `Cfg.VARS` en la
+  spec para seleccionar/reordenar por nombre (ver Paso 3 y
+  `README_cfg_reference.md`, campo `VARS`) — Chat 19, Hallazgo 7.
 
 ---
 
@@ -203,17 +207,20 @@ Abre `pipeline_micaso.m` en el Editor de MATLAB y ejecuta con **Ctrl+Enter**:
 | Campo | Descripción | Típico |
 |---|---|---|
 | `DATA_FILE` | Ruta al xlsx | — |
+| `VARS` | Selecciona/reordena columnas de la hoja `data` por nombre, sin editar el Excel (opcional; Chat 19) | ver `README_cfg_reference.md` |
 | `SCALE_FACTOR` | Factor de escala de los datos | `1` (ya en %) o `100` (log) |
 | `NLAG` | Número de lags del VAR | `4` (trim) / `12` o `24` (mens) |
 | `NEX` | Constante: `1`=sí, `0`=no | `1` |
 | `HORIZON` | Horizonte máximo IRF | `20`–`60` |
-| `INDEX_FEVD` | Horizonte para FEVD | `≤ HORIZON` |
+| `INDEX_FEVD` | Default de `FEVD_HORIZONS` si este no se define | `≤ HORIZON` |
+| `FEVD_HORIZONS` | Horizontes en los que se calcula la FEVD (Chat 19). Campo DE ESTIMACIÓN, no de output | `1:HORIZON` para la curva completa |
 | `ND` | Draws (testing: 500, prod: 5000+) | `500` |
 | `SEED` | Semilla aleatoria | `0` |
 | `HORIZONS_RESTRICT` | Horizontes de las restricciones | `0` |
 | `S{k}` | Sign restrictions sobre shock k (vía `build_restriction_row`). **`S` siempre es `cell(n_vars,1)`** — ver regla arriba | ver arriba |
 | `Z{k}` | Zero restrictions sobre shock k (solo IS, vía `build_restriction_row`). **`Z` siempre es `cell(n_vars,1)`** | ver arriba |
-| `SHOCK_IDX` | Shock(s) identificado(s) a graficar/exportar | escalar \| vector \| `'all'` (soporta varios desde Chat 19) |
+| `SHOCK_IDX` | Shock(s) identificado(s) a graficar/exportar (y, en IS, a incluir en la FEVD) | escalar \| vector \| `'all'` (soporta varios desde Chat 19) |
+| `SHOCK_NAMES` | Nombre de cada shock, para leyendas/títulos/nombres de archivo (Chat 19) | `{'supply','demand',...}` |
 | `CRED_BANDS` | Bandas de credibilidad | `[0.16 0.84]` |
 | `SUMMARY_HORIZONS` | Horizontes para tabla consola | `[0 1 4 8 12 20]` |
 | `OUTPUT_DIR` | Carpeta de salida del proyecto (figuras/tablas) | `fullfile(ex_dir, 'output')` — **siempre defínelo**, o las figuras/tablas caen en el folder legado compartido `refactored/output/` |
@@ -230,4 +237,5 @@ Abre `pipeline_micaso.m` en el Editor de MATLAB y ejecuta con **Ctrl+Enter**:
 - `validate/validate_cfg.m` — validación automática de la config antes de estimar
 - `README_cfg_reference.md` — referencia completa de TODOS los campos Cfg (Chat 19)
 - `src/get_output_fields.m` / `src/refresh_cfg_output.m` — permite editar parámetros de gráfica/exportación (SHOCK_IDX, CRED_BANDS, SUMMARY_HORIZONS, IRF_TYPE, IRF_NORM, OUTPUT_DIR) y re-correr la Sección 5 del pipeline SIN volver a estimar (Chat 19)
+
 
