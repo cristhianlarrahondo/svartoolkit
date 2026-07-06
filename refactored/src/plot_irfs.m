@@ -14,10 +14,26 @@ function plot_irfs(LtildeStruct, Dataset, Cfg, Results)
 %   vector, o 'all' (todos los shocks identificados). Antes solo aceptaba
 %   escalar; pasar un vector producia un error de MATLAB dentro de
 %   select_irfs.m y no generaba ninguna figura. Ahora se genera UNA
-%   FIGURA POR CADA SHOCK solicitado (mismo comportamiento que antes
-%   cuando SHOCK_IDX es escalar — el nombre de archivo NO cambia en ese
-%   caso, para no romper pipelines existentes; con multiples shocks se
-%   agrega el sufijo "_shockK" al nombre de archivo de cada figura).
+%   FIGURA POR CADA SHOCK solicitado.
+%
+%   CAMBIO (Chat 19, Hallazgo 9): naming convention unificada para TODAS
+%   las figuras: '<tipo>_shock<N>_<SHOCKNAME>.png' (p.ej.
+%   'irf_shock1_supply.png'), usando Cfg.SHOCK_NAMES si esta definido
+%   (default 'shock1', 'shock2', ... via resolve_shock_name.m). Esto
+%   CAMBIA los nombres de archivo respecto a versiones anteriores del
+%   toolkit (antes: 'irfs_<modo><sufijo>.png', sin nombre de shock) — es
+%   un cambio deliberado, no retrocompatible en el nombre del archivo.
+%
+%   CAMBIO (Chat 19, Hallazgo 12): antes se graficaba como maximo
+%   min(nresp,5) variables con un grid FIJO subplot(2,3,*) — con 6+
+%   variables se truncaba una variable silenciosamente. Ahora el grid se
+%   calcula dinamicamente (hasta 3 columnas) para graficar TODAS las
+%   variables de respuesta solicitadas.
+%
+%   CAMBIO (Chat 19, Hallazgo 10): el titulo general (sgtitle) ahora
+%   distingue IRF de CIRF ('IRF — Shock: <nombre>' vs 'CIRF — Shock:
+%   <nombre>'). Los paneles individuales muestran SOLO el nombre de la
+%   variable (ya no repiten "(cum.)" en cada panel de la figura CIRF).
 %
 %   Campos de Cfg usados (todos opcionales; con defaults seguros):
 %     IRF_TYPE      'irf' (def) | 'cirf' | 'both'
@@ -25,6 +41,7 @@ function plot_irfs(LtildeStruct, Dataset, Cfg, Results)
 %     IRF_NORM      'none' (def) | '1sd' | 'unit' | 'own_unit'
 %     NORM_SHOCK_IDX, NORM_VAR, NORM_HORIZON, NORM_VALUE — según IRF_NORM
 %     SHOCK_IDX     escalar | vector | 'all' (def: LtildeStruct.shock_idx)
+%     SHOCK_NAMES   cell array de strings (def: 'shock1','shock2',...)
 %     RESP_IDX      índice(s) de variables de respuesta (def: todos)
 %     OUTPUT_DIR    string (OPCIONAL) — ruta absoluta a la carpeta output/
 %                   del proyecto que llama (p.ej. projects/bnw/output/).
@@ -85,6 +102,11 @@ if isfield(Cfg, 'RESP_IDX') && ~isempty(Cfg.RESP_IDX)
     response_idx = Cfg.RESP_IDX;
 end
 
+shock_names = {};
+if isfield(Cfg, 'SHOCK_NAMES') && ~isempty(Cfg.SHOCK_NAMES)
+    shock_names = Cfg.SHOCK_NAMES;
+end
+
 %% ── Adjuntar var_labels a LtildeStruct para select_irfs ─────────────────
 endo_mask = strcmp(Dataset.var_roles, 'endogenous');
 all_labels = Dataset.var_labels(endo_mask);
@@ -92,12 +114,11 @@ LtildeStruct.var_labels = all_labels;
 
 %% ── Extraer IRFs de TODOS los shocks solicitados ─────────────────────────
 [irfs_by_shock, label_shock_arr, label_resp, shock_idx_resolved] = ...
-    select_irfs(LtildeStruct, shock_idx_req, response_idx);
+    select_irfs(LtildeStruct, shock_idx_req, response_idx, shock_names);
 % irfs_by_shock{j}: [horizon+1, numel(response_idx), ndraws]
 
 horizon    = LtildeStruct.horizon;
 n_shocks   = numel(shock_idx_resolved);
-multi_shock = n_shocks > 1;   % controla si se agrega sufijo _shockK al archivo
 
 %% ── Ruta de salida (una sola vez, fuera del loop de shocks) ─────────────
 if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
@@ -192,14 +213,18 @@ for j = 1:n_shocks
     label_shock = label_shock_arr{j};
     nresp       = size(irfs_raw, 2);
 
-    % Sufijo de archivo: solo se agrega "_shockK" si se pidieron varios
-    % shocks. Con un solo shock (el caso mas comun), el nombre de archivo
-    % es identico al de antes de este chat — no rompe pipelines existentes.
-    if multi_shock
-        shock_suffix = sprintf('_shock%d', sidx);
-    else
-        shock_suffix = '';
-    end
+    % Naming convention unificada (Chat 19, Hallazgo 9): SIEMPRE incluye
+    % shock<N>_<nombre>, sin importar si se pidio uno o varios shocks
+    % (cambio deliberado respecto al comportamiento anterior).
+    shock_name_safe = regexprep(label_shock, '[^a-zA-Z0-9_]', '_');
+    shock_tag       = sprintf('shock%d_%s', sidx, shock_name_safe);
+
+    % Grid dinamico (Chat 19, Hallazgo 12): antes se truncaba a
+    % min(nresp,5) con un grid fijo subplot(2,3,*). Ahora se grafican
+    % TODAS las nresp variables de respuesta, hasta 3 columnas.
+    n_panels = nresp;
+    n_cols   = min(n_panels, 3);
+    n_rows   = ceil(n_panels / n_cols);
 
     %% ── Normalización (A7) ───────────────────────────────────────────────
     [irfs_norm_arr, scale_factors] = normalize_irfs(irfs_raw, irf_norm, Cfg, Results);
@@ -213,16 +238,15 @@ for j = 1:n_shocks
     if ismember(irf_type, {'irf', 'both'})
         [irf_med, irf_blo, irf_bhi] = calc_stats(irfs_norm_arr);
 
-        hFig1 = figure('Name', sprintf('IRFs - %s', label_shock), 'NumberTitle', 'off');
-        set(hFig1, 'Position', [0 20 500 250]);
-        n_panels = min(nresp, 5);
+        hFig1 = figure('Name', sprintf('IRF - %s', label_shock), 'NumberTitle', 'off');
+        set(hFig1, 'Position', [0 20 180*n_cols 200*n_rows]);
         for kk = 1:n_panels
-            subplot(2, 3, kk);
+            subplot(n_rows, n_cols, kk);
             plot_panel(irf_med, irf_blo, irf_bhi, kk, label_resp{kk});
         end
-        sgtitle(sprintf('Shock: %s', label_shock), 'FontSize', fontsizetitle);
+        sgtitle(sprintf('IRF — Shock: %s', label_shock), 'FontSize', fontsizetitle);
         set(gcf, 'PaperPositionMode', 'auto');
-        fname1 = fullfile(fig_dir, ['irfs_', mode_str, shock_suffix, fig_suffix, '.png']);
+        fname1 = fullfile(fig_dir, ['irf_', shock_tag, fig_suffix, '.png']);
         print(fname1, '-dpng');
         fprintf('Figura IRF (shock %d: %s) guardada en: %s\n', sidx, label_shock, fname1);
     end
@@ -231,16 +255,17 @@ for j = 1:n_shocks
     if ismember(irf_type, {'cirf', 'both'})
         [cirf_med, cirf_blo, cirf_bhi] = calc_stats(cirfs_norm_arr);
 
-        hFig2 = figure('Name', sprintf('CIRFs - %s', label_shock), 'NumberTitle', 'off');
-        set(hFig2, 'Position', [50 20 500 250]);
-        n_panels = min(nresp, 5);
+        hFig2 = figure('Name', sprintf('CIRF - %s', label_shock), 'NumberTitle', 'off');
+        set(hFig2, 'Position', [50 20 180*n_cols 200*n_rows]);
         for kk = 1:n_panels
-            subplot(2, 3, kk);
-            plot_panel(cirf_med, cirf_blo, cirf_bhi, kk, [label_resp{kk}, ' (cum.)']);
+            subplot(n_rows, n_cols, kk);
+            % Chat 19, Hallazgo 10: el panel solo muestra el nombre de la
+            % variable — "CIRF" ya queda en el sgtitle, no se repite aqui.
+            plot_panel(cirf_med, cirf_blo, cirf_bhi, kk, label_resp{kk});
         end
-        sgtitle(sprintf('Shock: %s', label_shock), 'FontSize', fontsizetitle);
+        sgtitle(sprintf('CIRF — Shock: %s', label_shock), 'FontSize', fontsizetitle);
         set(gcf, 'PaperPositionMode', 'auto');
-        fname2 = fullfile(fig_dir, ['cirfs_', mode_str, shock_suffix, fig_suffix, '.png']);
+        fname2 = fullfile(fig_dir, ['cirf_', shock_tag, fig_suffix, '.png']);
         print(fname2, '-dpng');
         fprintf('Figura CIRF (shock %d: %s) guardada en: %s\n', sidx, label_shock, fname2);
     end
@@ -255,3 +280,4 @@ for j = 1:n_shocks
 end
 
 end
+
