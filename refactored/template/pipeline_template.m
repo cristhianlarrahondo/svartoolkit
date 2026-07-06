@@ -310,11 +310,11 @@ plot_irfs(Results_is.LtildeStruct, Dataset, Cfg_plot_is);
 fprintf('--- FEVD ---\n');
 Cfg_fevd_pfa          = Cfg_pfa;
 Cfg_fevd_pfa.FIG_SUFFIX = '_pfa';
-plot_fevd(Results_pfa.FEVD, Dataset, Cfg_fevd_pfa);
+plot_fevd(Results_pfa, Dataset, Cfg_fevd_pfa);   % Chat 19: firma nueva (antes recibia Results.FEVD)
 
 Cfg_fevd_is           = Cfg_is;
 Cfg_fevd_is.FIG_SUFFIX = '_is';
-plot_fevd(Results_is.FEVD, Dataset, Cfg_fevd_is);
+plot_fevd(Results_is, Dataset, Cfg_fevd_is);
 
 % ── 5d. Comparación PFA vs IS ────────────────────────────────────────────
 fprintf('--- Comparación PFA vs IS ---\n');
@@ -367,4 +367,5 @@ function s = format_horizons(H)
         s = ['h=' strjoin(arrayfun(@num2str, H, 'UniformOutput', false), ',')];
     end
 end
+
 
