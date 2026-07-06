@@ -1,4 +1,4 @@
-%VALIDATE_LOTE_CHAT20  Script de verificacion — Chat 19 (re-entregado como Chat 20) (Tipo MIXTO: S + R).
+%VALIDATE_LOTE_CHAT20  Script de verificacion — Chat 19, re-entregado (Tipo MIXTO: S + R).
 %
 %   ACTUALIZACION: este chat paso de ser puramente Tipo S a MIXTO porque
 %   los Hallazgos 6 (FEVD multi-shock/horizonte) y 7/8 (Cfg.VARS + n_vars
@@ -71,7 +71,7 @@ fprintf('================================================================\n\n');
 
 %% ── Setup de rutas ────────────────────────────────────────────────────────
 %  EDITAR: ruta absoluta a refactored/
-REF_ROOT = '/Users/cristhianlarrahondo/Documents/GitHub/svartoolkit/refactored';   % ← EDITAR
+REF_ROOT = '/ruta/absoluta/a/refactored';   % ← EDITAR
 
 addpath(fullfile(REF_ROOT, 'src'));
 addpath(fullfile(REF_ROOT, 'helpfunctions'));
@@ -449,7 +449,8 @@ n_results(end+1) = check('I1: sin Cfg.VARS (BNW), Dataset.nvar_total == 5 (regre
     Dataset.nvar_total == 5, sprintf('nvar_total=%d', Dataset.nvar_total));
 
 Cfg_i2 = Cfg_pfa;
-Cfg_i2.VARS = {Dataset.var_names{3}, Dataset.var_names{1}};   % 2 de 5, reordenadas
+Cfg_i2.VARS      = {Dataset.var_names{3}, Dataset.var_names{1}};   % 2 de 5, reordenadas
+Cfg_i2.VAR_ROLES = {'endogenous', 'endogenous'};                    % debe coincidir en largo con VARS
 Dataset_i2 = load_data(Cfg_i2);
 n_results(end+1) = check('I2: Cfg.VARS selecciona y reordena 2 de 5 columnas correctamente', ...
     Dataset_i2.nvar_total == 2 && ...
@@ -574,5 +575,4 @@ function ok_out = check(name, ok, detail)
     end
     ok_out = ok;
 end
-
 
