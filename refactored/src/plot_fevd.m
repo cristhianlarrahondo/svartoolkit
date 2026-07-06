@@ -145,7 +145,7 @@ for kk = 1:nresp
     rest_vec = max(1 - sum(med_mat, 2), 0);   % complemento a 1, nunca negativo
 
     hFig = figure('Name', sprintf('FEVD - %s', label_resp{kk}), 'NumberTitle', 'off');
-    set(hFig, 'Position', [50 50 560 340]);
+    set(hFig, 'Position', [50 50 480 380]);
     ax = axes('Parent', hFig);
 
     bar_data = [med_mat, rest_vec];
@@ -168,7 +168,8 @@ for kk = 1:nresp
     title(ax, {title_str; subtitle_str}, 'FontSize', fontsize_title, 'Interpreter', 'none');
 
     legend(ax, [label_shock, {'Resto (no identificado)'}], ...
-        'Location', 'eastoutside', 'FontSize', fontsize_axes - 1, 'Box', 'off');
+        'Location', 'southoutside', 'Orientation', 'horizontal', ...
+        'FontSize', fontsize_axes - 1, 'Box', 'off');
 
     set(hFig, 'PaperPositionMode', 'auto');
 
