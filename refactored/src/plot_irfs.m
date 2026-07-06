@@ -35,6 +35,12 @@ function plot_irfs(LtildeStruct, Dataset, Cfg, Results)
 %   <nombre>'). Los paneles individuales muestran SOLO el nombre de la
 %   variable (ya no repiten "(cum.)" en cada panel de la figura CIRF).
 %
+%   CAMBIO (Chat 20): el label del eje X y sus marcas (XTick) ya NO estan
+%   hardcodeados a 'Quarters'/[0 10 20 30 40] (asumian BNW trimestral con
+%   horizon=40). Ahora el label sale de Dataset.freq ('Q'->'Quarters',
+%   'M'->'Months', 'A'->'Years', 'S'->'Semesters', desconocida->'Horizonte'),
+%   y las marcas se calculan dinamicamente segun Cfg.HORIZON.
+%
 %   Campos de Cfg usados (todos opcionales; con defaults seguros):
 %     IRF_TYPE      'irf' (def) | 'cirf' | 'both'
 %     CRED_BANDS    [0.16 0.84] (def) — array [N x 2] de cuantiles
@@ -160,6 +166,21 @@ end
 
 x_plot = (0:horizon)';
 
+% Label del eje X segun la frecuencia REAL de los datos (Chat 20: antes
+% estaba hardcodeado a 'Quarters', asumiendo BNW trimestral — ya no
+% aplica en casos con otra frecuencia, p.ej. mensual en ERPT).
+freq_labels = struct('Q', 'Quarters', 'M', 'Months', 'A', 'Years', 'S', 'Semesters');
+if isfield(Dataset, 'freq') && isfield(freq_labels, Dataset.freq)
+    x_axis_label = freq_labels.(Dataset.freq);
+else
+    x_axis_label = 'Horizonte';   % frecuencia desconocida ('?') o Dataset sin .freq
+end
+
+% XTick dinamico (Chat 20: antes hardcodeado a [0 10 20 30 40], asumiendo
+% horizon=40 — con otro Cfg.HORIZON quedaban ticks vacios o cortados).
+n_ticks = min(6, horizon + 1);
+x_ticks = unique(round(linspace(0, horizon, n_ticks)));
+
 %% ── Helper: calcular estadisticos ─────────────────────────────────────────
     function [med_mat, bands_lo, bands_hi] = calc_stats(arr)
         T_ = size(arr, 1);
@@ -197,8 +218,8 @@ x_plot = (0:horizon)';
                  'FaceAlpha', 0.5, 'EdgeColor', 'none');
         end
 
-        xlabel('Quarters');
-        set(gca, 'XTick', [0 10 20 30 40]);
+        xlabel(x_axis_label);
+        set(gca, 'XTick', x_ticks);
         set(gca, 'LineWidth', axiswidth);
         set(gca, 'FontSize', fontsizeaxes);
         grid on; box off;
