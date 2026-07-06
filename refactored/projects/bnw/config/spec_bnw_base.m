@@ -32,6 +32,14 @@ end
 Cfg.DATA_FILE = fullfile(ex_dir, 'data', 'data_bnw.xlsx');
 Cfg.VAR_ROLES = {'endogenous','endogenous','endogenous','endogenous','endogenous'};
 
+% Cfg.VARS (Chat 19, Hallazgo 7 — opcional, NO definido aqui a proposito):
+% permite seleccionar/reordenar columnas de la hoja "data" por nombre, sin
+% editar el Excel. BNW usa TODAS las columnas en el orden del Excel (el
+% default cuando Cfg.VARS no esta definido), que es exactamente la
+% condicion de regresion de este campo. Ejemplo de uso (con los nombres
+% REALES de columna de tu xlsx, verificalos antes de usar):
+%   Cfg.VARS = {'tfp', 'sp', 'cons', 'rir', 'hours'};   % mismo orden que VAR_ROLES
+
 % -- OUTPUT: siempre relativo a projects/bnw/, NUNCA a refactored/output/ --
 Cfg.OUTPUT_DIR = fullfile(ex_dir, 'output');
 
@@ -56,7 +64,7 @@ Cfg.NS = 1;                    % vestigial: solo lo usa run_timing.m, no
                                % run_pfa.m/run_is.m. Se mantiene por
                                % compatibilidad con specs de timing.
 
-n_vars     = 5;
+n_vars     = sum(strcmp(Cfg.VAR_ROLES, 'endogenous'));   % ← auto (Chat 19, Hallazgo 8; antes: hardcoded a mano)
 n_horizons = numel(Cfg.HORIZONS_RESTRICT);   % = 1 aqui (solo h=0)
 
 % build_restriction_row(var_idx, horizon_idx, n_vars, n_horizons, sign_val)
@@ -80,7 +88,15 @@ Cfg.PLOT_IRFS        = true;
 Cfg.SUMMARY_HORIZONS = [0 4 8 20 40];
 Cfg.CRED_BANDS       = [0.16 0.84];
 Cfg.SHOCK_IDX        = 1;
+Cfg.SHOCK_NAMES      = {'optimism'};   % ← Chat 19, Hallazgo 9: nombre del unico shock identificado en BNW
 Cfg.IRF_TYPE         = 'irf';
 Cfg.IRF_NORM         = 'none';
+
+% Cfg.FEVD_HORIZONS (Chat 19, Hallazgo 6): horizontes en los que se
+% calcula la FEVD. Con 1:Cfg.HORIZON (en vez del default de un solo
+% horizonte = Cfg.INDEX_FEVD) el grafico de barras apiladas de
+% plot_fevd.m muestra la curva completa por horizonte.
+Cfg.FEVD_HORIZONS = 1:Cfg.HORIZON;
+
 
 
