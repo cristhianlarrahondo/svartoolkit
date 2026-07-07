@@ -1,26 +1,27 @@
-%PIPELINE
+%PIPELINE  ERPT — solo Importance Sampler (no hay flujo PFA en este proyecto)
 %
 %   FLUJO:
-%     Sección 0 — Setup de rutas (REF_ROOT + PROJ_ROOT)  (una sola vez)
-%     Sección 1 — SPEC_NAME editable + cargar/explorar datos
-%     Sección 2 — Revisar config
-%     Sección 3 — Estimación PFA
-%     Sección 4 — Estimación IS
-%     Sección 5 — Post-estimación
-%     Sección 6 — Export
+%     Seccion 0 — Setup de rutas (REF_ROOT)                    (una sola vez)
+%     Seccion 1 — SPEC_NAME editable + cargar datos + carpetas de output
+%     Seccion 2 — Revisar config (restricciones Z/S en lenguaje natural)
+%     Seccion 3 — Estimacion IS
+%     Seccion 4 — Post-estimacion
+%     Seccion 5 — Export
+%
+%   Para cambiar de variante (spec_v0, spec_v1, ...): editar UNA linea en
+%   la Seccion 1 (SPEC_NAME) y volver a correr desde ahi. Cada spec define
+%   su propio Cfg.OUTPUT_DIR = output/<SPEC_NAME>/, asi que las corridas
+%   de distintas variantes nunca se pisan entre si.
 
-%% ── Sección 0 — Setup de rutas ───────────────────────────────────────────
+%% ── Seccion 0 — Setup de rutas ───────────────────────────────────────────
 %
 %  ┌─────────────────────────────────────────────────────────────────────┐
-%  │  EDITAR SOLO ESTA LÍNEA. Luego Ctrl+Enter aquí.                    │
+%  │  EDITAR SOLO ESTA LINEA. Luego Ctrl+Enter aqui.                     │
 %  └─────────────────────────────────────────────────────────────────────┘
 REF_ROOT = '/Users/cristhianlarrahondo/Documents/GitHub/svartoolkit/refactored';   % ← EDITAR (motor compartido)
 
-
 PROJ_ROOT = fullfile(REF_ROOT, 'projects', 'erpt');   % este proyecto
 PROJ_CFG  = fullfile(PROJ_ROOT, 'config');
-OUT_FIG   = fullfile(PROJ_ROOT, 'output', 'figures');   
-OUT_TAB   = fullfile(PROJ_ROOT, 'output', 'tables');    
 
 addpath(fullfile(REF_ROOT, 'src'));
 addpath(fullfile(REF_ROOT, 'config'));
@@ -28,35 +29,39 @@ addpath(fullfile(REF_ROOT, 'helpfunctions'));
 addpath(fullfile(REF_ROOT, 'validate'));
 addpath(PROJ_CFG);
 
-if ~isfolder(OUT_FIG), mkdir(OUT_FIG); end
-if ~isfolder(OUT_TAB), mkdir(OUT_TAB); end
-
 fprintf('\n[Setup OK]\n');
 fprintf('  REF_ROOT  : %s\n', REF_ROOT);
-fprintf('  PROJ_ROOT : %s\n', PROJ_ROOT);
-fprintf('  Figures  → %s\n', OUT_FIG);
-fprintf('  Tables   → %s\n\n', OUT_TAB);
+fprintf('  PROJ_ROOT : %s\n\n', PROJ_ROOT);
 
-%% ── Sección 1 — SPEC_NAME editable + cargar y explorar datos ────────────
+%% ── Seccion 1 — SPEC_NAME editable + cargar datos + carpetas output ─────
 %
 %  ┌─────────────────────────────────────────────────────────────────────┐
-%  │  EDITAR SI QUIERES OTRA SPEC PARA EXPLORACIÓN (no afecta Secciones │
-%  │  3/4, que siempre corren PFA e IS con sus specs respectivas).      │
+%  │  EDITAR SOLO ESTA LINEA para cambiar de variante.                   │
+%  │  Debe existir config/<SPEC_NAME>.m (ej. 'spec_v0', 'spec_v1', ...)  │
 %  └─────────────────────────────────────────────────────────────────────┘
-SPEC_NAME = 'spec_is';
+SPEC_NAME = 'spec_v0';
 
 clear Cfg;
 run(fullfile(PROJ_CFG, [SPEC_NAME '.m']));
-Cfg_eda = Cfg; clear Cfg;
+Cfg_is = Cfg; clear Cfg;
 
-Dataset = load_data(Cfg_eda);
+% Carpetas de output propias de esta spec (Cfg_is.OUTPUT_DIR = .../output/<SPEC_NAME>/)
+OUT_FIG = fullfile(Cfg_is.OUTPUT_DIR, 'figures');
+OUT_TAB = fullfile(Cfg_is.OUTPUT_DIR, 'tables');
+if ~isfolder(OUT_FIG), mkdir(OUT_FIG); end
+if ~isfolder(OUT_TAB), mkdir(OUT_TAB); end
 
-fprintf('\n');
+fprintf('  Spec activa : %s\n', SPEC_NAME);
+fprintf('  Figures  → %s\n', OUT_FIG);
+fprintf('  Tables   → %s\n\n', OUT_TAB);
+
+Dataset = load_data(Cfg_is);
+
 fprintf('════════════════════════════════════════════\n');
-fprintf('  DATOS: ERPT \n');
+fprintf('  DATOS: ERPT\n');
 fprintf('════════════════════════════════════════════\n');
 fprintf('  Spec activa: %s\n', SPEC_NAME);
-fprintf('  Archivo    : %s\n', Cfg_eda.DATA_FILE);
+fprintf('  Archivo    : %s\n', Cfg_is.DATA_FILE);
 fprintf('  Frecuencia : %s\n', Dataset.freq);
 dates = Dataset.dates;
 if iscell(dates)
@@ -68,9 +73,9 @@ else
 end
 fprintf('  T (total)  : %d observaciones\n', size(Dataset.Y_raw, 1));
 fprintf('  T (modelo) : %d obs (tras lags: T-%d=%d)\n', ...
-    Cfg_eda.NLAG, size(Dataset.Y_raw,1), size(Dataset.Y_raw,1)-Cfg_eda.NLAG);
+    Cfg_is.NLAG, size(Dataset.Y_raw,1), size(Dataset.Y_raw,1)-Cfg_is.NLAG);
 fprintf('  n (endo)   : %d variables\n', Dataset.nvar);
-fprintf('  p (lags)   : %d\n', Cfg_eda.NLAG);
+fprintf('  p (lags)   : %d\n', Cfg_is.NLAG);
 fprintf('════════════════════════════════════════════\n\n');
 
 endo_mask  = strcmp(Dataset.var_roles, 'endogenous');
@@ -95,150 +100,127 @@ else
     fprintf('  [ALERTA] %d NaN encontrados.\n\n', n_nan);
 end
 
-%% ── Sección 2 — Revisar configuración ───────────────────────────────────
+%% ── Seccion 2 — Revisar configuracion ────────────────────────────────────
 %
-%  Imprime parámetros del modelo y traduce las restricciones Z/S a
-%  lenguaje natural (variable, shock, horizonte, dirección).
+%  Imprime parametros del modelo y traduce las restricciones Z/S a
+%  lenguaje natural (variable, shock, horizonte, direccion). Solo IS:
+%  no hay rama PFA que condicionar.
 
-clear Cfg;
-run(fullfile(PROJ_CFG, [SPEC_NAME '.m']));
-Cfg_is = Cfg; clear Cfg;
+fprintf('\n════════════════════════════════════════════\n');
+fprintf('  CONFIG: %s (IS)\n', Cfg_is.SPEC_NAME);
+fprintf('════════════════════════════════════════════\n');
+fprintf('  Lags (p)   : %d\n', Cfg_is.NLAG);
+fprintf('  Horizonte  : %d\n', Cfg_is.HORIZON);
+fprintf('  FEVD en h  : %d\n', Cfg_is.INDEX_FEVD);
+fprintf('  Draws (nd) : %d\n', Cfg_is.ND);
+fprintf('  Semilla    : %d\n', Cfg_is.SEED);
+fprintf('  Output dir : %s\n', Cfg_is.OUTPUT_DIR);
+fprintf('  Horizontes restricciones: ');
+fprintf('%d ', Cfg_is.HORIZONS_RESTRICT); fprintf('\n\n');
 
-for ii = 2:2
-    if ii == 1, Cfg_show = Cfg_pfa; label = 'PFA';
-    else,        Cfg_show = Cfg_is;  label = 'IS';  end
+vnames = endo_names;   % del Dataset cargado en Seccion 1
+n_v    = numel(Cfg_is.S);
 
-    fprintf('\n════════════════════════════════════════════\n');
-    fprintf('  CONFIG: %s  (%s)\n', Cfg_show.SPEC_NAME, label);
-    fprintf('════════════════════════════════════════════\n');
-    fprintf('  Lags (p)   : %d\n', Cfg_show.NLAG);
-    fprintf('  Horizonte  : %d trimestres\n', Cfg_show.HORIZON);
-    fprintf('  FEVD en h  : %d\n', Cfg_show.INDEX_FEVD);
-    fprintf('  Draws (nd) : %d\n', Cfg_show.ND);
-    fprintf('  Semilla    : %d\n', Cfg_show.SEED);
-    fprintf('  Output dir : %s\n', Cfg_show.OUTPUT_DIR);
-    fprintf('  Horizontes restricciones: ');
-    fprintf('%d ', Cfg_show.HORIZONS_RESTRICT); fprintf('\n\n');
-
-    vnames = endo_names;   % del Dataset cargado en Sección 1
-    n_v    = numel(Cfg_show.S);
-
-    fprintf('  Restricciones de SIGNO (S):\n');
-    any_s = false;
-    for k = 1:n_v
-        if ~isempty(Cfg_show.S{k})
-            any_s = true;
-            for row = 1:size(Cfg_show.S{k},1)
-                sv = Cfg_show.S{k}(row,:);
-                vi = find(abs(sv) > 0);
-                if vi <= numel(vnames), vn = vnames{vi};
-                else, vn = sprintf('var_%d',vi); end
-                if sv(vi) > 0, dir = 'POSITIVO'; else, dir = 'NEGATIVO'; end
-                h_str = format_horizons_bnw(Cfg_show.HORIZONS_RESTRICT);
-                fprintf('    Shock %d  →  %s (var %d): %s en %s\n', ...
-                    k, vn, vi, dir, h_str);
-            end
+fprintf('  Restricciones de SIGNO (S):\n');
+any_s = false;
+for k = 1:n_v
+    if ~isempty(Cfg_is.S{k})
+        any_s = true;
+        for row = 1:size(Cfg_is.S{k},1)
+            sv = Cfg_is.S{k}(row,:);
+            vi = find(abs(sv) > 0);
+            if vi <= numel(vnames), vn = vnames{vi};
+            else, vn = sprintf('var_%d',vi); end
+            if sv(vi) > 0, dir = 'POSITIVO'; else, dir = 'NEGATIVO'; end
+            h_str = format_horizons_erpt(Cfg_is.HORIZONS_RESTRICT);
+            fprintf('    Shock %d (%s)  →  %s (var %d): %s en %s\n', ...
+                k, Cfg_is.SHOCK_NAMES{k}, vn, vi, dir, h_str);
         end
     end
-    if ~any_s, fprintf('    (ninguna)\n'); end
+end
+if ~any_s, fprintf('    (ninguna)\n'); end
 
-    fprintf('  Restricciones de CERO (Z):\n');
-    any_z = false;
-    for k = 1:n_v
-        if ~isempty(Cfg_show.Z{k})
-            any_z = true;
-            for row = 1:size(Cfg_show.Z{k},1)
-                zv = Cfg_show.Z{k}(row,:);
-                vi = find(abs(zv) > 0);
-                if vi <= numel(vnames), vn = vnames{vi};
-                else, vn = sprintf('var_%d',vi); end
-                h_str = format_horizons_bnw(Cfg_show.HORIZONS_RESTRICT);
-                fprintf('    Shock %d  →  %s (var %d): SIN RESPUESTA en %s\n', ...
-                    k, vn, vi, h_str);
-            end
+fprintf('  Restricciones de CERO (Z):\n');
+any_z = false;
+for k = 1:n_v
+    if ~isempty(Cfg_is.Z{k})
+        any_z = true;
+        for row = 1:size(Cfg_is.Z{k},1)
+            zv = Cfg_is.Z{k}(row,:);
+            vi = find(abs(zv) > 0);
+            if vi <= numel(vnames), vn = vnames{vi};
+            else, vn = sprintf('var_%d',vi); end
+            h_str = format_horizons_erpt(Cfg_is.HORIZONS_RESTRICT);
+            fprintf('    Shock %d (%s)  →  %s (var %d): SIN RESPUESTA en %s\n', ...
+                k, Cfg_is.SHOCK_NAMES{k}, vn, vi, h_str);
         end
     end
-    if ~any_z, fprintf('    (ninguna)\n'); end
-
-    % Matriz de restricciones completa (Chat 19, Hallazgo 2): vista de
-    % conjunto variables x shocks, complementaria a la traduccion fila
-    % por fila de arriba.
-    print_restriction_matrix(Cfg_show, Dataset);
 end
+if ~any_z, fprintf('    (ninguna)\n'); end
 
-fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec y vuelve a correr esta sección.\n\n');
+% Matriz de restricciones completa: vista de conjunto variables x shocks,
+% complementaria a la traduccion fila por fila de arriba.
+print_restriction_matrix(Cfg_is, Dataset);
 
-%% ── Sección 4 — Estimación IS ────────────────────────────────────────────
+fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec activa y vuelve a correr esta seccion.\n\n');
+
+%% ── Seccion 3 — Estimacion IS ────────────────────────────────────────────
 %
-%  IS: sign + zero restrictions.
+%  IS: sign + zero restrictions (Algorithm 3, ARW 2018).
 
-clear Cfg;
-run(fullfile(PROJ_CFG, [SPEC_NAME '.m']));
-Cfg_is = Cfg; clear Cfg;
-Cfg_is.PLOT_IRFS = false;
-
-if ~exist('Dataset', 'var')
-    Dataset = load_data(Cfg_is);
-end
-
-fprintf('\n--- Estimación IS (nd=%d) ---\n', Cfg_is.ND);
-validate_cfg(Cfg_is, Dataset);  
+fprintf('\n--- Estimacion IS (nd=%d) ---\n', Cfg_is.ND);
+validate_cfg(Cfg_is, Dataset);
 Post_is    = build_posterior(Dataset, Cfg_is);
 rng(Cfg_is.SEED);
 Results_is = run_is(Post_is, Cfg_is);
 
-%% ── Sección 5 — Post-estimación ──────────────────────────────────────────
+%% ── Seccion 4 — Post-estimacion ──────────────────────────────────────────
 %
-%  Todas las funciones de análisis. Gráficas guardadas SIEMPRE en
-%  projects/bnw/output/ (via Cfg.OUTPUT_DIR), nunca en refactored/output/.
-%  Requiere: Secciones 3 y 4 ejecutadas.
+%  Todas las funciones de analisis. Figuras y tablas SIEMPRE en
+%  output/<SPEC_NAME>/ (via Cfg_is.OUTPUT_DIR), nunca en refactored/output/.
+%  Requiere: Seccion 3 ejecutada.
 
 fprintf('\n════════════════════════════════════════════\n');
-fprintf('  POST-ESTIMACIÓN\n');
+fprintf('  POST-ESTIMACION: %s\n', Cfg_is.SPEC_NAME);
 fprintf('════════════════════════════════════════════\n\n');
 
-% ── Recargar SOLO los campos de output 
-Cfg_is  = refresh_cfg_output(Cfg_is,  fullfile(PROJ_CFG, [SPEC_NAME '.m']));
+% Recargar SOLO los campos de output (no afecta el muestreo ya corrido)
+Cfg_is = refresh_cfg_output(Cfg_is, fullfile(PROJ_CFG, [SPEC_NAME '.m']));
 
-% 5a. Resumen numérico
-fprintf('--- IRF Summary (IS) ---\n');
+% 4a. Resumen numerico
+fprintf('--- IRF Summary ---\n');
 print_summary(Results_is.LtildeStruct, Dataset, Cfg_is);
 
-% 5b. IRFs en pantalla + guardadas
-fprintf('--- Gráficas IRF ---\n');
-Cfg_p_is            = Cfg_is;
-Cfg_p_is.FIG_SUFFIX = '_is';
-plot_irfs(Results_is.LtildeStruct, Dataset, Cfg_p_is);
+% 4b. IRFs en pantalla + guardadas
+fprintf('--- Graficas IRF ---\n');
+plot_irfs(Results_is.LtildeStruct, Dataset, Cfg_is);
 
-% 5c. FEVD
+% 4c. FEVD
 fprintf('--- FEVD ---\n');
+plot_fevd(Results_is, Dataset, Cfg_is);
 
-Cfg_f_is            = Cfg_is;
-Cfg_f_is.FIG_SUFFIX = '_is';
-plot_fevd(Results_is, Dataset, Cfg_f_is);
-
-% 5e. Estabilidad
+% 4d. Estabilidad
 fprintf('--- Estabilidad del VAR ---\n');
-check_stability(Results_is,  Cfg_is);
+check_stability(Results_is, Cfg_is);
 
-% 5f. Diagnóstico pesos IS
-fprintf('--- Diagnóstico pesos IS ---\n');
+% 4e. Diagnostico pesos IS
+fprintf('--- Diagnostico pesos IS ---\n');
 diagnose_is_weights(Results_is, Cfg_is);
 
-%% ── Sección 6 — Export ───────────────────────────────────────────────────
+%% ── Seccion 5 — Export ───────────────────────────────────────────────────
 %
-%  Exporta resultados a Excel. Archivo en projects/bnw/output/tables/
-%  (via Cfg.OUTPUT_DIR), nunca en refactored/output/.
+%  Exporta resultados a Excel. Archivo en output/<SPEC_NAME>/tables/
+%  (via Cfg_is.OUTPUT_DIR), nunca en refactored/output/.
 
-fprintf('--- Export IS → Excel ---\n');
+fprintf('--- Export → Excel ---\n');
 export_results(Results_is, Dataset, Cfg_is);
 
-fprintf('\n[OK] Tablas  → %s\n', OUT_TAB);
-fprintf('[OK] Figuras → %s\n\n', OUT_FIG);
+fprintf('\n[OK] Tablas  → %s\n', fullfile(Cfg_is.OUTPUT_DIR, 'tables'));
+fprintf('[OK] Figuras → %s\n\n', fullfile(Cfg_is.OUTPUT_DIR, 'figures'));
 
-%% ── Función auxiliar ─────────────────────────────────────────────────────
+%% ── Funcion auxiliar ─────────────────────────────────────────────────────
 
-function s = format_horizons_bnw(H)
+function s = format_horizons_erpt(H)
     if isscalar(H)
         s = sprintf('h=%d', H);
     elseif isequal(H(:)', H(1):H(end))
@@ -247,7 +229,3 @@ function s = format_horizons_bnw(H)
         s = ['h=' strjoin(arrayfun(@num2str, H(:)', 'UniformOutput', false), ',')];
     end
 end
-
-
-
-
