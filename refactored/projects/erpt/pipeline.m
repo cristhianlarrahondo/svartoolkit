@@ -162,6 +162,11 @@ if ~any_z, fprintf('    (ninguna)\n'); end
 % complementaria a la traduccion fila por fila de arriba.
 print_restriction_matrix(Cfg_is, Dataset);
 
+% Verificacion de prior/dummies: confirma con evidencia (no solo eco de
+% Cfg) que lo que definiste en la spec realmente va a entrar a la
+% estimacion. Expected_is se compara despues de build_posterior (Seccion 3).
+Expected_is = print_estimation_setup(Cfg_is, Dataset);
+
 fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec activa y vuelve a correr esta seccion.\n\n');
 
 %% ── Seccion 3 — Estimacion IS ────────────────────────────────────────────
@@ -171,6 +176,44 @@ fprintf('\n[Tip] Si algo no es lo que esperabas, edita la spec activa y vuelve a
 fprintf('\n--- Estimacion IS (nd=%d) ---\n', Cfg_is.ND);
 validate_cfg(Cfg_is, Dataset);
 Post_is    = build_posterior(Dataset, Cfg_is);
+
+% Verificacion cruzada: lo que PosteriorParams reporta REALMENTE haber
+% usado (build_posterior.m ya devuelve estos campos) debe coincidir con
+% lo que Seccion 2 esperaba. Si no coincide, algo se rompio entre la
+% lectura de la spec y la construccion del posterior.
+if exist('Expected_is', 'var')
+    fprintf('  [Verificado] prior_type : esperado=%s | usado=%s', ...
+        Expected_is.prior_type, Post_is.prior_type);
+    if strcmp(Expected_is.prior_type, Post_is.prior_type)
+        fprintf('  [OK]\n');
+    else
+        fprintf('  [DISCREPANCIA]\n');
+        warning('pipeline:priorMismatch', ...
+            'prior_type esperado (%s) != usado (%s).', Expected_is.prior_type, Post_is.prior_type);
+    end
+    fprintf('  [Verificado] ndummies   : esperado=%d | usado=%d', ...
+        Expected_is.ndummies, Post_is.ndummies);
+    if isequal(Expected_is.ndummies, Post_is.ndummies)
+        fprintf('  [OK]\n');
+    else
+        fprintf('  [DISCREPANCIA]\n');
+        warning('pipeline:dummyMismatch', ...
+            'ndummies esperado (%d) != usado (%d).', Expected_is.ndummies, Post_is.ndummies);
+    end
+    fprintf('  [Verificado] m (dim xt) : esperado=%d | usado=%d', ...
+        Expected_is.m, Post_is.m);
+    if isequal(Expected_is.m, Post_is.m)
+        fprintf('  [OK]\n\n');
+    else
+        fprintf('  [DISCREPANCIA]\n\n');
+        warning('pipeline:mMismatch', ...
+            'm esperado (%d) != usado (%d).', Expected_is.m, Post_is.m);
+    end
+else
+    fprintf(['  [ALERTA] Expected_is no existe en el workspace — corre la Seccion 2\n' ...
+             '           antes de esta seccion para habilitar la verificacion cruzada.\n\n']);
+end
+
 rng(Cfg_is.SEED);
 Results_is = run_is(Post_is, Cfg_is);
 
