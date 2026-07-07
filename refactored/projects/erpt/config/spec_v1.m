@@ -84,10 +84,10 @@ Cfg.ITER_SHOW    = 1000;
 % Para agregar una dummy, descomentar y ajustar. Requiere Dataset.dates
 % (datetime), que el loader ya provee automaticamente.
 %
-% Cfg.DUMMIES(1).type  = 'step';     % 'oneoff' | 'pulse' | 'step' | 'seasonal'
-% Cfg.DUMMIES(1).year  = 2020;
-% Cfg.DUMMIES(1).month = 3;          % ej. quiebre cambiario/pandemia marzo 2020
 % Cfg.DUMMIES(1).name  = 'covid_step';
+% Cfg.DUMMIES(1).type  = 'step';        % 'oneoff' | 'pulse' | 'step' | 'seasonal'
+% Cfg.DUMMIES(1).date  = [2020, 3];     % [year, month] — ej. quiebre pandemia marzo 2020
+%                                       % (convencion ultimo mes del periodo: Q1->3, Q2->6, ...)
 
 % -- RESTRICCIONES --------------------------------------------------------
 Cfg.HORIZONS_RESTRICT = 0;    % restricciones en horizonte 0
