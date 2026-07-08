@@ -56,10 +56,10 @@ Cfg.ITER_SHOW    = 1000;
 % Para probar otro prior en esta variante, descomentar UNA de las opciones
 % siguientes (no combinar mas de una):
 %
-% Cfg.PRIOR.type    = 'minnesota';
-% Cfg.PRIOR.lambda1 = 0.2;   % tightness
-% Cfg.PRIOR.lambda2 = 0.5;   % mezcla own/cross-variable
-% Cfg.PRIOR.lambda3 = 1;     % lag decay
+Cfg.PRIOR.type    = 'minnesota';
+Cfg.PRIOR.lambda1 = 0.2;   % tightness
+Cfg.PRIOR.lambda2 = 0.5;   % mezcla own/cross-variable
+Cfg.PRIOR.lambda3 = 1;     % lag decay
 %
 % Cfg.PRIOR.type = 'sims_zha';
 % Cfg.PRIOR.mu5  = 1;
