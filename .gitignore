@@ -6,3 +6,4 @@
 refactored/validate/validate_lote_chat19.m
 *.asv
 ~$*
+.DS_Store
