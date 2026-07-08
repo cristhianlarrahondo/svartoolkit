@@ -39,7 +39,7 @@ fprintf('  PROJ_ROOT : %s\n\n', PROJ_ROOT);
 %  │  EDITAR SOLO ESTA LINEA para cambiar de variante.                   │
 %  │  Debe existir config/<SPEC_NAME>.m (ej. 'spec_v0', 'spec_v1', ...)  │
 %  └─────────────────────────────────────────────────────────────────────┘
-SPEC_NAME = 'spec_v0';
+SPEC_NAME = 'spec_v1';
 
 clear Cfg;
 run(fullfile(PROJ_CFG, [SPEC_NAME '.m']));
