@@ -46,8 +46,8 @@ Cfg.SCALE_FACTOR = 1;
 % -- MUESTREO -------------------------------------------------------------
 Cfg.SEED         = 0;
 Cfg.MODE         = 'is';           % unico modo usado en este proyecto (no hay flujo PFA)
-Cfg.ND           = 3e4;            % draws ortogonal-reduced-form
-Cfg.MAX_IS_DRAWS = 1e4;            % max draws efectivos tras resampling
+Cfg.ND           = 3e5;            % draws ortogonal-reduced-form
+Cfg.MAX_IS_DRAWS = 1e5;            % max draws efectivos tras resampling
 Cfg.CONJUGATE    = 'structural';   % 'structural' | 'irfs'
 Cfg.ITER_SHOW    = 1000;
 
@@ -56,10 +56,10 @@ Cfg.ITER_SHOW    = 1000;
 % Para probar otro prior en esta variante, descomentar UNA de las opciones
 % siguientes (no combinar mas de una):
 %
- %Cfg.PRIOR.type    = 'minnesota';
- %Cfg.PRIOR.lambda1 = 0.2;   % tightness
- %Cfg.PRIOR.lambda2 = 0.5;   % mezcla own/cross-variable
- %Cfg.PRIOR.lambda3 = 1;     % lag decay
+% Cfg.PRIOR.type    = 'minnesota';
+% Cfg.PRIOR.lambda1 = 0.2;   % tightness
+% Cfg.PRIOR.lambda2 = 0.5;   % mezcla own/cross-variable
+% Cfg.PRIOR.lambda3 = 1;     % lag decay
 %
 % Cfg.PRIOR.type = 'sims_zha';
 % Cfg.PRIOR.mu5  = 1;
@@ -84,21 +84,10 @@ Cfg.ITER_SHOW    = 1000;
 % Para agregar una dummy, descomentar y ajustar. Requiere Dataset.dates
 % (datetime), que el loader ya provee automaticamente.
 %
-%Cfg.DUMMIES(1).type  = 'step';     % 'oneoff' | 'pulse' | 'step' | 'seasonal'
-%Cfg.DUMMIES(1).year  = 2020;
-% Cfg.DUMMIES(1).month = 3;          % ej. quiebre cambiario/pandemia marzo 2020
 % Cfg.DUMMIES(1).name  = 'covid_step';
-
-% -- DUMMIES EXOGENAS (Chat 13 / build_dummies.m) -------------------------
-Cfg.DUMMIES(1).name       = 'covid1';
-Cfg.DUMMIES(1).type       = 'pulse';
-Cfg.DUMMIES(1).date_start = [2020, 3];   % marzo 2020
-Cfg.DUMMIES(1).date_end   = [2020, 6];   % junio 2020
-
-Cfg.DUMMIES(2).name       = 'covid2';
-Cfg.DUMMIES(2).type       = 'pulse';
-Cfg.DUMMIES(2).date_start = [2021, 3];   % marzo 2021
-Cfg.DUMMIES(2).date_end   = [2021, 6];   % junio 2021
+% Cfg.DUMMIES(1).type  = 'step';        % 'oneoff' | 'pulse' | 'step' | 'seasonal'
+% Cfg.DUMMIES(1).date  = [2020, 3];     % [year, month] — ej. quiebre pandemia marzo 2020
+%                                       % (convencion ultimo mes del periodo: Q1->3, Q2->6, ...)
 
 % -- RESTRICCIONES --------------------------------------------------------
 Cfg.HORIZONS_RESTRICT = 0;    % restricciones en horizonte 0
