@@ -196,7 +196,7 @@ for ff = 1:numel(file_specs)
     end
 
     fprintf('  %-6s  %-10s  %-8s', 'Choque', 'Precio', 'h');
-    fprintf('  %8s  %8s  %8s\n', 'Mediana', sprintf('p%.0f', Cfg.CRED_BANDS(1,1)*100), sprintf('p%.0f', Cfg.CRED_BANDS(1,2)*100));
+    fprintf('  %8s  %8s  %8s\n', sprintf('p%.0f', Cfg.CRED_BANDS(1,1)*100), 'Mediana', sprintf('p%.0f', Cfg.CRED_BANDS(1,2)*100));
 
     for k = 1:n_shocks_out
         sh = ERPT.shocks(k);
@@ -221,7 +221,7 @@ for ff = 1:numel(file_specs)
             h12 = find(ERPT.horizons == 12, 1);
             if ~isempty(h12)
                 fprintf('  %-6s  %-10s  h=%-3d  %8.4f  %8.4f  %8.4f\n', ...
-                    sh.name, pr.var, 12, pr.median(h12), pr.band_lo(1,h12), pr.band_hi(1,h12));
+                    sh.name, pr.var, 12, pr.band_lo(1,h12), pr.median(h12), pr.band_hi(1,h12));
             end
         end
     end
