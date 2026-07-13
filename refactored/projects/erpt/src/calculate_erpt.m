@@ -26,8 +26,15 @@ function ERPT = calculate_erpt(Results, Dataset, Cfg, transform_type, price_vars
 %                       CRED_BANDS    [N x 2] percentiles (default [0.16 0.84])
 %     transform_type  'mm' | 'aa'  — OBLIGATORIO, ver Nota 1 abajo.
 %     price_vars      cell array de nombres de variables de precio
-%                     (default {'inf_imp','inf_con'} — decision 5: SIEMPRE
-%                     ambas, no bajo demanda).
+%                     (default {'imp_inf','con_inf'} — decision 5: SIEMPRE
+%                     ambas, no bajo demanda). OJO: este default coincide
+%                     con la convencion de nombres de data_erpt_mm.xlsx /
+%                     data_erpt_aa.xlsx (los archivos nuevos, ERPT-Chat 2+).
+%                     El archivo legacy data_erpt.xlsx (spec_v0.m/spec_v1.m
+%                     actuales) usa una convencion DISTINTA e invertida
+%                     (inf_imp, inf_con) -- si se llama esta funcion contra
+%                     ese dataset legacy hay que pasar price_vars explicito
+%                     con esos nombres.
 %     denom_var       nombre de la variable denominador (default 'ner').
 %     horizons        vector de horizontes 0-based a reportar, en la
 %                     unidad nativa de Dataset (meses en este proyecto)
@@ -88,7 +95,7 @@ if nargin < 6 || isempty(denom_var)
     denom_var = 'ner';
 end
 if nargin < 5 || isempty(price_vars)
-    price_vars = {'inf_imp', 'inf_con'};
+    price_vars = {'imp_inf', 'con_inf'};   % convencion data_erpt_mm/aa.xlsx
 end
 if nargin < 4 || isempty(transform_type)
     error('calculate_erpt:missingTransform', ...
