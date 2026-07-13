@@ -21,24 +21,41 @@ function ERPT = calculate_erpt(Results, Dataset, Cfg, transform_type, price_vars
 %                     var_labels, freq — mismo orden que LtildeStruct).
 %     Cfg             struct de la spec activa. Campos usados (todos con
 %                     default seguro si faltan):
-%                       SHOCK_IDX     escalar | vector | 'all' (default 'all')
-%                       SHOCK_NAMES   cell array de nombres (default {})
-%                       CRED_BANDS    [N x 2] percentiles (default [0.16 0.84])
+%                       SHOCK_IDX       escalar | vector | 'all' (default 'all')
+%                       SHOCK_NAMES     cell array de nombres (default {})
+%                       CRED_BANDS      [N x 2] percentiles (default [0.16 0.84])
+%                       ERPT_PRICE_VARS cell array (override de price_vars,
+%                                       solo si el argumento no se paso)
+%                       ERPT_DENOM_VAR  string (override de denom_var, solo
+%                                       si el argumento no se paso)
+%                       ERPT_HORIZONS   vector (override de horizons, solo
+%                                       si el argumento no se paso)
 %     transform_type  'mm' | 'aa'  — OBLIGATORIO, ver Nota 1 abajo.
-%     price_vars      cell array de nombres de variables de precio
-%                     (default {'imp_inf','con_inf'} — decision 5: SIEMPRE
-%                     ambas, no bajo demanda). OJO: este default coincide
-%                     con la convencion de nombres de data_erpt_mm.xlsx /
-%                     data_erpt_aa.xlsx (los archivos nuevos, ERPT-Chat 2+).
-%                     El archivo legacy data_erpt.xlsx (spec_v0.m/spec_v1.m
-%                     actuales) usa una convencion DISTINTA e invertida
-%                     (inf_imp, inf_con) -- si se llama esta funcion contra
-%                     ese dataset legacy hay que pasar price_vars explicito
-%                     con esos nombres.
-%     denom_var       nombre de la variable denominador (default 'ner').
+%     price_vars      cell array de nombres de variables de precio.
+%                     Precedencia: argumento explicito > Cfg.ERPT_PRICE_VARS
+%                     > default {'imp_inf','pro_inf','con_inf'} (importados,
+%                     productor, consumidor — decision 5 revisada en
+%                     ERPT-Chat 2: originalmente 2 variables, ahora 3).
+%                     OJO: esta convencion de nombres es la de
+%                     data_erpt_mm.xlsx / data_erpt_aa.xlsx (los archivos
+%                     nuevos). El archivo legacy data_erpt.xlsx
+%                     (spec_v0.m/spec_v1.m actuales) usa nombres DISTINTOS
+%                     (inf_imp, inf_p, inf_con) -- si se llama esta funcion
+%                     contra ese dataset legacy hay que pasar price_vars
+%                     explicito con esos nombres.
+%     denom_var       nombre de la variable denominador. Precedencia:
+%                     argumento explicito > Cfg.ERPT_DENOM_VAR > default
+%                     'ner'.
 %     horizons        vector de horizontes 0-based a reportar, en la
-%                     unidad nativa de Dataset (meses en este proyecto)
-%                     (default [1 6 12 24] — decision 3).
+%                     unidad nativa de Dataset (meses en este proyecto).
+%                     Precedencia: argumento explicito > Cfg.ERPT_HORIZONS
+%                     > default [3 6 12 24 36] (3m, 6m, 1a, 2a, 3a —
+%                     decision 3 revisada en ERPT-Chat 2: originalmente
+%                     [1 6 12 24]). El mismo vector de horizontes aplica
+%                     igual para 'mm' y 'aa': ambos representan el mismo
+%                     objeto (nivel acumulado) en la misma escala temporal
+%                     de meses, por construccion (ver decision 2) -- no
+%                     requiere ajuste distinto por transform_type.
 %
 %   ── Salida ────────────────────────────────────────────────────────────
 %     ERPT.transform_type, .horizons, .cred_bands, .denom_var, .price_vars
@@ -87,15 +104,27 @@ function ERPT = calculate_erpt(Results, Dataset, Cfg, transform_type, price_vars
 %
 %   Ver tambien: select_irfs.m, compute_cirfs.m, resolve_shock_name.m
 
-%% ── Defaults de argumentos opcionales ────────────────────────────────────
+%% ── Defaults de argumentos opcionales (arg explicito > Cfg.ERPT_* > hardcoded) ─
 if nargin < 7 || isempty(horizons)
-    horizons = [1 6 12 24];
+    if isfield(Cfg, 'ERPT_HORIZONS') && ~isempty(Cfg.ERPT_HORIZONS)
+        horizons = Cfg.ERPT_HORIZONS;
+    else
+        horizons = [3 6 12 24 36];   % 3m, 6m, 1a, 2a, 3a
+    end
 end
 if nargin < 6 || isempty(denom_var)
-    denom_var = 'ner';
+    if isfield(Cfg, 'ERPT_DENOM_VAR') && ~isempty(Cfg.ERPT_DENOM_VAR)
+        denom_var = Cfg.ERPT_DENOM_VAR;
+    else
+        denom_var = 'ner';
+    end
 end
 if nargin < 5 || isempty(price_vars)
-    price_vars = {'imp_inf', 'con_inf'};   % convencion data_erpt_mm/aa.xlsx
+    if isfield(Cfg, 'ERPT_PRICE_VARS') && ~isempty(Cfg.ERPT_PRICE_VARS)
+        price_vars = Cfg.ERPT_PRICE_VARS;
+    else
+        price_vars = {'imp_inf', 'pro_inf', 'con_inf'};   % convencion data_erpt_mm/aa.xlsx
+    end
 end
 if nargin < 4 || isempty(transform_type)
     error('calculate_erpt:missingTransform', ...
