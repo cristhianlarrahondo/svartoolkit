@@ -12,15 +12,18 @@
 %       I-f) ne exacto                = referencia guardada en el chat 7
 %
 %   BLOQUE 2 — Integracion funcional end-to-end (calculate_erpt.m):
-%     Corre spec_v0 (con ND reducido -- SOLO para velocidad de este smoke
-%     test, NO es una corrida cientifica; ver ERPT-Chat 3/4 para las
-%     baselines reales) y llama calculate_erpt.m con transform_type='mm'
-%     Y 'aa', para TODOS los choques de Cfg.SHOCK_IDX x ambas variables de
-%     precio (inf_imp, inf_con).
+%     Corre las restricciones de spec_v0 contra los datos REALES
+%     data_erpt_mm.xlsx (transform_type='mm') y data_erpt_aa.xlsx
+%     (transform_type='aa'), con ND reducido -- SOLO para velocidad de
+%     este smoke test, NO es una corrida cientifica (ver ERPT-Chat 3/4
+%     para las baselines reales). Para TODOS los choques de Cfg.SHOCK_IDX
+%     x ambas variables de precio (imp_inf, con_inf -- convencion de los
+%     archivos nuevos, distinta de la legacy inf_imp/inf_con).
 %
-%   BLOQUE 3 — Casos de error esperados:
+%   BLOQUE 3 — Casos de error esperados (5):
 %     transform_type faltante / invalido, nombre de variable inexistente,
-%     horizontes fuera de rango.
+%     horizontes fuera de rango, nombre de variable de la convencion
+%     legacy usado contra el dataset nuevo.
 %
 %   Pegar el output completo en el chat para verificacion.
 
@@ -97,71 +100,99 @@ else
 end
 
 % =========================================================================
-%  BLOQUE 2 -- Integracion funcional: calculate_erpt.m sobre spec_v0
+%  BLOQUE 2 -- Integracion funcional: calculate_erpt.m con datos REALES
+%              (data_erpt_mm.xlsx / data_erpt_aa.xlsx)
 % =========================================================================
 fprintf('======================================================\n');
-fprintf('  BLOQUE 2 -- Integracion calculate_erpt.m (spec_v0)\n');
+fprintf('  BLOQUE 2 -- Integracion calculate_erpt.m (datos reales)\n');
 fprintf('======================================================\n\n');
 
-clear Cfg;
-Cfg = struct();
-run(fullfile(PROJ_CFG, 'spec_v0.m'));
+% NOTA: data_erpt_mm.xlsx / data_erpt_aa.xlsx usan una convencion de
+% nombres DISTINTA a la del archivo legacy data_erpt.xlsx que usan
+% spec_v0.m/spec_v1.m (inf_imp/inf_p/inf_con/ise/tib vs.
+% imp_inf/pro_inf/con_inf/ea/ir). El ORDEN de las 6 variables core es el
+% mismo, asi que las restricciones S/Z posicionales de spec_v0.m siguen
+% siendo validas -- este bloque solo sobreescribe Cfg.VARS y Cfg.DATA_FILE
+% sobre esa base. Esto es un Cfg ad-hoc para ESTE smoke test; las specs
+% formales de las 4 baselines (spec_aa_diffuse_v0, etc., ya con Cfg.VARS
+% correcto de fabrica) son ERPT-Chat 3.
+VARS_NUEVO = {'ner', 'imp_inf', 'pro_inf', 'con_inf', 'ea', 'ir'};   % core; excluye oil_price/tot/com_price (robustez futura, B.6)
 
-% Override SOLO para velocidad del smoke test -- NO es una corrida
-% cientifica (ver ERPT-Chat 3/4 para las baselines reales con Cfg.ND
-% completo). Todo lo demas (restricciones, prior, dummies) queda igual.
-Cfg.ND           = 3000;
-Cfg.MAX_IS_DRAWS = 1000;
-Cfg.PLOT_IRFS    = false;
-Cfg.SAVE_RESULTS = false;
-fprintf('  [Smoke test] Cfg.ND reducido a %d (solo velocidad, no cientifico)\n', Cfg.ND);
+file_specs = struct('transform', {'mm', 'aa'}, 'filename', {'data_erpt_mm.xlsx', 'data_erpt_aa.xlsx'});
 
-Dataset_erpt = load_data(Cfg);
-fprintf('  Dataset: %d variables endogenas, freq=%s\n', Dataset_erpt.nvar, Dataset_erpt.freq);
-
-validate_cfg(Cfg, Dataset_erpt);
-Posterior_erpt = build_posterior(Dataset_erpt, Cfg);
-
-fprintf('  Corriendo IS ERPT smoke test (nd=%d)...\n', Cfg.ND);
-rng('default'); rng(Cfg.SEED);
-tic;
-Results_erpt = run_is(Posterior_erpt, Cfg);
-t_erpt = toc;
-fprintf('  Tiempo: %.1f seg | ne=%d\n\n', t_erpt, Results_erpt.ne);
-
-if Results_erpt.ne < 20
-    fprintf(['  [ALERTA] ne=%d es muy bajo para este smoke test (ND reducido). ' ...
-        'Las tablas de abajo pueden verse degeneradas -- esto es un problema ' ...
-        'de tamano de muestra del smoke test, no de calculate_erpt.m. Si ne=0, ' ...
-        'sube Cfg.ND en este bloque (linea "Cfg.ND = 3000") y vuelve a correr.\n\n'], ...
-        Results_erpt.ne);
-end
-
-bloque2_ok = true;
+bloque2_ok   = true;
 bloque2_msgs = {};
+Results_by_transform = struct();
+Dataset_by_transform = struct();
+Cfg_by_transform      = struct();
 
-for tt = 1:2
-    switch tt
-        case 1, transform_type = 'mm'; label_t = 'm/m (CIRF estandar)';
-        case 2, transform_type = 'aa'; label_t = 'a/a (recursion rezago 12)';
+for ff = 1:numel(file_specs)
+    transform_type = file_specs(ff).transform;
+    data_file      = file_specs(ff).filename;
+
+    fprintf('------------------------------------------------------\n');
+    fprintf('  Archivo: %s   (transform_type=''%s'')\n', data_file, transform_type);
+    fprintf('------------------------------------------------------\n');
+
+    clear Cfg;
+    Cfg = struct();
+    run(fullfile(PROJ_CFG, 'spec_v0.m'));   % base: restricciones S/Z, SHOCK_NAMES, prior, CRED_BANDS
+
+    % -- Overrides para usar el archivo real correspondiente ----------------
+    Cfg.DATA_FILE = fullfile(PROJ_ROOT, 'data', data_file);
+    Cfg.VARS      = VARS_NUEVO;
+    % Cfg.VAR_ROLES ya trae 6 entradas 'endogenous' (mismo largo) -- se reusa
+
+    % Override SOLO para velocidad del smoke test -- NO es una corrida
+    % cientifica (ver ERPT-Chat 3/4 para las baselines reales con Cfg.ND
+    % completo).
+    Cfg.ND           = 3000;
+    Cfg.MAX_IS_DRAWS = 1000;
+    Cfg.PLOT_IRFS    = false;
+    Cfg.SAVE_RESULTS = false;
+    fprintf('  [Smoke test] Cfg.ND reducido a %d (solo velocidad, no cientifico)\n', Cfg.ND);
+
+    Dataset_erpt = load_data(Cfg);
+    fprintf('  Dataset: %d variables endogenas, freq=%s, T=%d obs\n', ...
+        Dataset_erpt.nvar, Dataset_erpt.freq, size(Dataset_erpt.Y_raw, 1));
+
+    validate_cfg(Cfg, Dataset_erpt);
+    Posterior_erpt = build_posterior(Dataset_erpt, Cfg);
+
+    fprintf('  Corriendo IS (nd=%d)...\n', Cfg.ND);
+    rng('default'); rng(Cfg.SEED);
+    tic;
+    Results_erpt = run_is(Posterior_erpt, Cfg);
+    t_erpt = toc;
+    fprintf('  Tiempo: %.1f seg | ne=%d\n\n', t_erpt, Results_erpt.ne);
+
+    if Results_erpt.ne < 20
+        fprintf(['  [ALERTA] ne=%d es muy bajo para este smoke test (ND reducido). ' ...
+            'Las tablas de abajo pueden verse degeneradas -- problema de ' ...
+            'tamano de muestra del smoke test, no de calculate_erpt.m. Si ' ...
+            'ne=0, sube Cfg.ND en este bloque y vuelve a correr.\n\n'], Results_erpt.ne);
     end
 
-    fprintf('--- calculate_erpt.m, transform_type=''%s'' [%s] ---\n', transform_type, label_t);
+    Results_by_transform.(transform_type) = Results_erpt;
+    Dataset_by_transform.(transform_type) = Dataset_erpt;
+    Cfg_by_transform.(transform_type)      = Cfg;
+
+    fprintf('--- calculate_erpt.m, transform_type=''%s'' ---\n', transform_type);
     try
         ERPT = calculate_erpt(Results_erpt, Dataset_erpt, Cfg, transform_type);
     catch ME
         bloque2_ok = false;
-        bloque2_msgs{end+1} = sprintf('transform=%s: ERROR INESPERADO: %s', transform_type, ME.message); %#ok<AGROW>
+        bloque2_msgs{end+1} = sprintf('%s (%s): ERROR INESPERADO: %s', data_file, transform_type, ME.message); %#ok<AGROW>
         fprintf('  [ERROR] %s\n\n', ME.message);
         continue;
     end
 
-    % -- Chequeos estructurales --------------------------------------------
+    % -- Chequeos estructurales ----------------------------------------------
     n_shocks_out = numel(ERPT.shocks);
     if n_shocks_out ~= Dataset_erpt.nvar
         bloque2_ok = false;
-        bloque2_msgs{end+1} = sprintf('transform=%s: se esperaban %d choques (Cfg.SHOCK_IDX=all), se obtuvieron %d', ...
-            transform_type, Dataset_erpt.nvar, n_shocks_out); %#ok<AGROW>
+        bloque2_msgs{end+1} = sprintf('%s: se esperaban %d choques (Cfg.SHOCK_IDX=all), se obtuvieron %d', ...
+            data_file, Dataset_erpt.nvar, n_shocks_out); %#ok<AGROW>
     end
 
     fprintf('  %-6s  %-10s  %-8s', 'Choque', 'Precio', 'h');
@@ -172,12 +203,12 @@ for tt = 1:2
         for p = 1:numel(sh.prices)
             pr = sh.prices(p);
 
-            % -- Chequeos de tamano ---------------------------------------
+            % -- Chequeos de tamano -----------------------------------------
             nh = numel(ERPT.horizons);
             if numel(pr.median) ~= nh || size(pr.band_lo,2) ~= nh || size(pr.ratio_draws,1) ~= nh
                 bloque2_ok = false;
-                bloque2_msgs{end+1} = sprintf('transform=%s shock=%s precio=%s: dimensiones inconsistentes', ...
-                    transform_type, sh.name, pr.var); %#ok<AGROW>
+                bloque2_msgs{end+1} = sprintf('%s shock=%s precio=%s: dimensiones inconsistentes', ...
+                    data_file, sh.name, pr.var); %#ok<AGROW>
             end
             if any(~isfinite(pr.median))
                 % Esperado ocasionalmente en S3 (set-identificado) si el
@@ -187,7 +218,6 @@ for tt = 1:2
                     sh.name, pr.var);
             end
 
-            % Imprimir horizonte h=12 (indice dentro de ERPT.horizons) como muestra
             h12 = find(ERPT.horizons == 12, 1);
             if ~isempty(h12)
                 fprintf('  %-6s  %-10s  h=%-3d  %8.4f  %8.4f  %8.4f\n', ...
@@ -196,29 +226,26 @@ for tt = 1:2
         end
     end
     fprintf('\n');
-end
 
-% -- Sanity check cualitativo: S3 (oferta, set-identificado) deberia tener
-%    bandas mas anchas que Cam/Dem en h=12 (decision 4, ERPT-Chat 1) -----
-try
-    ERPT_mm = calculate_erpt(Results_erpt, Dataset_erpt, Cfg, 'mm');
-    h12 = find(ERPT_mm.horizons == 12, 1);
-    names_out = {ERPT_mm.shocks.name};
+    % -- Sanity check cualitativo: S3 (oferta, set-identificado) deberia
+    %    tener bandas mas anchas que Cam en h=12 (decision 4, ERPT-Chat 1) --
+    names_out = {ERPT.shocks.name};
     idx_ofe = find(strcmp(names_out, 'Ofe'), 1);
     idx_cam = find(strcmp(names_out, 'Cam'), 1);
+    h12 = find(ERPT.horizons == 12, 1);
     if ~isempty(idx_ofe) && ~isempty(idx_cam) && ~isempty(h12)
-        w_ofe = ERPT_mm.shocks(idx_ofe).prices(1).band_hi(1,h12) - ERPT_mm.shocks(idx_ofe).prices(1).band_lo(1,h12);
-        w_cam = ERPT_mm.shocks(idx_cam).prices(1).band_hi(1,h12) - ERPT_mm.shocks(idx_cam).prices(1).band_lo(1,h12);
-        fprintf('  [Diagnostico] Ancho de banda h=12, inf_imp: Ofe=%.4f vs Cam=%.4f  (%s ancho mas grande en Ofe, esperado por set-identificacion; con ND reducido puede no cumplirse)\n\n', ...
-            w_ofe, w_cam, iif_local(w_ofe > w_cam, '[OK]', '[NO necesariamente -- revisar con ND completo]'));
+        w_ofe = ERPT.shocks(idx_ofe).prices(1).band_hi(1,h12) - ERPT.shocks(idx_ofe).prices(1).band_lo(1,h12);
+        w_cam = ERPT.shocks(idx_cam).prices(1).band_hi(1,h12) - ERPT.shocks(idx_cam).prices(1).band_lo(1,h12);
+        fprintf('  [Diagnostico] Ancho de banda h=12, %s: Ofe=%.4f vs Cam=%.4f  (%s; con ND reducido puede no cumplirse)\n\n', ...
+            ERPT.shocks(idx_ofe).prices(1).var, w_ofe, w_cam, ...
+            iif_local(w_ofe > w_cam, '[OK] Ofe mas ancho, esperado', '[NO necesariamente -- revisar con ND completo]'));
     end
-catch ME
-    fprintf('  [Diagnostico] No se pudo calcular (motivo: %s) -- no bloqueante.\n\n', ME.message);
 end
 
 if bloque2_ok
-    fprintf('  >> BLOQUE 2: PASA -- calculate_erpt.m corre end-to-end para ''mm'' y ''aa'',\n');
-    fprintf('     todos los choques x ambas variables de precio, sin errores inesperados.\n\n');
+    fprintf('  >> BLOQUE 2: PASA -- calculate_erpt.m corre end-to-end contra data_erpt_mm.xlsx\n');
+    fprintf('     (transform=mm) y data_erpt_aa.xlsx (transform=aa), todos los choques x\n');
+    fprintf('     ambas variables de precio, sin errores inesperados.\n\n');
 else
     fprintf('  >> BLOQUE 2: NO PASA. Detalle:\n');
     for i = 1:numel(bloque2_msgs)
@@ -237,9 +264,15 @@ fprintf('======================================================\n\n');
 bloque3_ok = true;
 bloque3_msgs = {};
 
+% Reusa los resultados 'mm' ya corridos en el Bloque 2 (mismos objetos,
+% ningun recalculo).
+Results_mm = Results_by_transform.mm;
+Dataset_mm = Dataset_by_transform.mm;
+Cfg_mm     = Cfg_by_transform.mm;
+
 % Caso 1: transform_type faltante
 try
-    calculate_erpt(Results_erpt, Dataset_erpt, Cfg); %#ok<NASGU>
+    calculate_erpt(Results_mm, Dataset_mm, Cfg_mm); %#ok<NASGU>
     bloque3_ok = false;
     bloque3_msgs{end+1} = 'transform_type faltante: NO lanzo error (deberia)'; %#ok<AGROW>
     fprintf('  [FAIL] transform_type faltante no genero error\n');
@@ -249,7 +282,7 @@ end
 
 % Caso 2: transform_type invalido
 try
-    calculate_erpt(Results_erpt, Dataset_erpt, Cfg, 'yoy'); %#ok<NASGU>
+    calculate_erpt(Results_mm, Dataset_mm, Cfg_mm, 'yoy'); %#ok<NASGU>
     bloque3_ok = false;
     bloque3_msgs{end+1} = 'transform_type invalido: NO lanzo error (deberia)'; %#ok<AGROW>
     fprintf('  [FAIL] transform_type invalido no genero error\n');
@@ -257,9 +290,10 @@ catch ME
     fprintf('  [OK] transform_type invalido -> error esperado: %s\n', ME.identifier);
 end
 
-% Caso 3: variable denominador inexistente
+% Caso 3: variable denominador inexistente (probando ademas que un nombre
+% de la convencion LEGACY, inf_imp, no exista en el dataset nuevo)
 try
-    calculate_erpt(Results_erpt, Dataset_erpt, Cfg, 'mm', {'inf_imp'}, 'variable_que_no_existe'); %#ok<NASGU>
+    calculate_erpt(Results_mm, Dataset_mm, Cfg_mm, 'mm', {'inf_imp'}, 'variable_que_no_existe'); %#ok<NASGU>
     bloque3_ok = false;
     bloque3_msgs{end+1} = 'denom_var inexistente: NO lanzo error (deberia)'; %#ok<AGROW>
     fprintf('  [FAIL] denom_var inexistente no genero error\n');
@@ -269,7 +303,7 @@ end
 
 % Caso 4: horizonte fuera de rango
 try
-    calculate_erpt(Results_erpt, Dataset_erpt, Cfg, 'mm', {'inf_imp'}, 'ner', [1 6 12 999]); %#ok<NASGU>
+    calculate_erpt(Results_mm, Dataset_mm, Cfg_mm, 'mm', {'imp_inf'}, 'ner', [1 6 12 999]); %#ok<NASGU>
     bloque3_ok = false;
     bloque3_msgs{end+1} = 'horizonte fuera de rango: NO lanzo error (deberia)'; %#ok<AGROW>
     fprintf('  [FAIL] horizonte fuera de rango no genero error\n');
@@ -277,9 +311,21 @@ catch ME
     fprintf('  [OK] horizonte fuera de rango -> error esperado: %s\n', ME.identifier);
 end
 
+% Caso 5: nombre de variable de la convencion LEGACY usado como price_var
+% contra el dataset NUEVO -- debe fallar (son datasets con nombres
+% distintos, ver nota al inicio del Bloque 2)
+try
+    calculate_erpt(Results_mm, Dataset_mm, Cfg_mm, 'mm', {'inf_p'}, 'ner'); %#ok<NASGU>
+    bloque3_ok = false;
+    bloque3_msgs{end+1} = 'price_var de convencion legacy contra dataset nuevo: NO lanzo error (deberia)'; %#ok<AGROW>
+    fprintf('  [FAIL] price_var legacy (inf_p) contra dataset nuevo no genero error\n');
+catch ME
+    fprintf('  [OK] price_var legacy (inf_p) contra dataset nuevo -> error esperado: %s\n', ME.identifier);
+end
+
 fprintf('\n');
 if bloque3_ok
-    fprintf('  >> BLOQUE 3: PASA -- los 4 casos de error se comportan como se esperaba.\n\n');
+    fprintf('  >> BLOQUE 3: PASA -- los 5 casos de error se comportan como se esperaba.\n\n');
 else
     fprintf('  >> BLOQUE 3: NO PASA. Detalle:\n');
     for i = 1:numel(bloque3_msgs)
