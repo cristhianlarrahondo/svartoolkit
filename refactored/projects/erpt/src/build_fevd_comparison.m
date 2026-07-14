@@ -27,7 +27,7 @@ function T_by_shock = build_fevd_comparison(Results_by_spec, Dataset_by_spec, Cf
 %   ── Salida ───────────────────────────────────────────────────────────────
 %     T_by_shock   struct, un campo por nombre de choque resuelto (p.ej.
 %                  'Cam', 'Dem', 'Ofe', 'shock4', ...). Cada campo es una
-%                  tabla: variable | horizon | <spec>_median | <spec>_p_lo
+%                  tabla: variable | horizon | <spec>_p_lo | <spec>_median
 %                  | <spec>_p_hi
 %
 %   Vive en projects/erpt/src/ (Tipo S -- no toca src/ compartido, no
@@ -138,8 +138,8 @@ end
 col_names = cell(1, n_specs * 3);
 for ss = 1:n_specs
     safe_sn = regexprep(spec_names{ss}, '[^a-zA-Z0-9_]', '_');
-    col_names{(ss-1)*3 + 1} = sprintf('%s_median', safe_sn);
-    col_names{(ss-1)*3 + 2} = sprintf('%s_p_lo', safe_sn);
+    col_names{(ss-1)*3 + 1} = sprintf('%s_p_lo', safe_sn);
+    col_names{(ss-1)*3 + 2} = sprintf('%s_median', safe_sn);
     col_names{(ss-1)*3 + 3} = sprintf('%s_p_hi', safe_sn);
 end
 all_col_names = [{'variable', 'horizon'}, col_names];
@@ -167,8 +167,8 @@ for jj = 1:n_shocks
                 sl       = Res_ss.FEVD(vv, jj, h_idx_ss(hh), :);
                 cb       = cred_bands_ref;
 
-                data_cols{r, (ss-1)*3 + 1} = quantile(sl(:), 0.50);
-                data_cols{r, (ss-1)*3 + 2} = quantile(sl(:), cb(1));
+                data_cols{r, (ss-1)*3 + 1} = quantile(sl(:), cb(1));
+                data_cols{r, (ss-1)*3 + 2} = quantile(sl(:), 0.50);
                 data_cols{r, (ss-1)*3 + 3} = quantile(sl(:), cb(2));
             end
         end
