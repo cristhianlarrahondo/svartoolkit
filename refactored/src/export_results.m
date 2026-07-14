@@ -7,17 +7,19 @@ function export_results(Results, Dataset, Cfg)
 %     1. metadata                — spec, fecha, variables, modo, semilla
 %     2. irf_summary[_s<k>]      — UNA HOJA POR CADA SHOCK solicitado,
 %                                  formato ANCHO (Chat 19, Hallazgo 11):
-%                                  columnas shock | horizon | <resp1>_median |
-%                                  <resp1>_p<lo> | <resp1>_p<hi> | <resp2>_median | ...
-%                                  una fila por horizonte, horizonte
-%                                  ascendente desde 0.
+%                                  columnas shock | horizon | <resp1>_p<lo> |
+%                                  <resp1>_median | <resp1>_p<hi> | <resp2>_p<lo> | ...
+%                                  (ERPT-Chat 5: orden p_lo|median|p_hi por
+%                                  entidad, antes median|p_lo|p_hi) — una
+%                                  fila por horizonte, horizonte ascendente
+%                                  desde 0.
 %     3. cirf_summary[_s<k>]     — idem para CIRFs (solo si IRF_TYPE incluye 'cirf')
 %     4. fevd_summary[_v<k>]     — UNA HOJA POR CADA VARIABLE de respuesta
 %                                  (Chat 19, Hallazgo 6: FEVD es multi-shock
 %                                  y multi-horizonte ahora — ver run_pfa.m/
 %                                  run_is.m). Formato ancho: columnas
-%                                  horizon | <shock1>_median | <shock1>_p<lo> |
-%                                  <shock1>_p<hi> | <shock2>_median | ...
+%                                  horizon | <shock1>_p<lo> | <shock1>_median |
+%                                  <shock1>_p<hi> | <shock2>_p<lo> | ...
 %     5. run_diagnostics         — ESS, tasa aceptacion, tiempo, nd
 %
 %   CAMBIO (Chat 19, Hallazgo 11): las hojas irf_summary/cirf_summary
@@ -168,14 +170,20 @@ nh     = numel(h_all);
 
 %% ── Helper: nombres de columnas por bloque de "entidad" (respuesta/shock) ─
 function col_names = build_block_col_names(entity_names, cred_bands_in, n_bands_in)
+%   Orden por entidad (ERPT-Chat 5, lectura natural izq->der): limites
+%   inferiores de banda MAS ANCHA a MAS ANGOSTA, luego la mediana, luego
+%   limites superiores de banda MAS ANGOSTA a MAS ANCHA. Con n_bands_in=1
+%   (caso tipico del proyecto) esto es simplemente p_lo | median | p_hi.
     n_entities = numel(entity_names);
     col_names  = cell(1, n_entities * (1 + 2*n_bands_in));
     kk_col = 1;
     for ee = 1:n_entities
         safe_e = regexprep(entity_names{ee}, '[^a-zA-Z0-9_]', '_');
+        for bb = n_bands_in:-1:1
+            col_names{kk_col} = sprintf('%s_p%.0f', safe_e, cred_bands_in(bb,1)*100); kk_col = kk_col + 1;
+        end
         col_names{kk_col} = sprintf('%s_median', safe_e); kk_col = kk_col + 1;
         for bb = 1:n_bands_in
-            col_names{kk_col} = sprintf('%s_p%.0f', safe_e, cred_bands_in(bb,1)*100); kk_col = kk_col + 1;
             col_names{kk_col} = sprintf('%s_p%.0f', safe_e, cred_bands_in(bb,2)*100); kk_col = kk_col + 1;
         end
     end
@@ -193,9 +201,11 @@ function rows = build_irf_rows_wide(irfs_arr, label_shock_in, ...
         col = 3;
         for jj = 1:nresp_in
             sl = irfs_arr(h_idx_in(ii), jj, :);
+            for bb = n_bands_in:-1:1
+                rows{ii, col} = quantile(sl(:), cred_bands_in(bb,1)); col = col + 1;
+            end
             rows{ii, col} = quantile(sl(:), 0.50); col = col + 1;
             for bb = 1:n_bands_in
-                rows{ii, col} = quantile(sl(:), cred_bands_in(bb,1)); col = col + 1;
                 rows{ii, col} = quantile(sl(:), cred_bands_in(bb,2)); col = col + 1;
             end
         end
@@ -213,9 +223,11 @@ function rows = build_fevd_rows_wide(FEVD_in, v_idx_in, ...
         col = 2;
         for jj = 1:n_shocks_in
             sl = FEVD_in(v_idx_in, jj, hh_i, :);
+            for bb = n_bands_in:-1:1
+                rows{hh_i, col} = quantile(sl(:), cred_bands_in(bb,1)); col = col + 1;
+            end
             rows{hh_i, col} = quantile(sl(:), 0.50); col = col + 1;
             for bb = 1:n_bands_in
-                rows{hh_i, col} = quantile(sl(:), cred_bands_in(bb,1)); col = col + 1;
                 rows{hh_i, col} = quantile(sl(:), cred_bands_in(bb,2)); col = col + 1;
             end
         end
