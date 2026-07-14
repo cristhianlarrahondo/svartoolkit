@@ -6,7 +6,8 @@ function [T_erpt, T_diag] = build_erpt_comparison(ERPT_by_spec, Results_by_spec,
 %
 %   Construye una tabla ANCHA (mismo patron que export_results.m): una
 %   fila por combinacion choque x variable_de_precio x horizonte, con un
-%   bloque de 3 columnas (mediana | p_lo | p_hi) por cada spec comparada.
+%   bloque de 3 columnas (p_lo | mediana | p_hi -- ERPT-Chat 5) por cada
+%   spec comparada.
 %
 %   ── Decisiones confirmadas en ERPT-Chat 4 ───────────────────────────────
 %     - Choques incluidos: solo los NOMBRADOS por defecto {'Cam','Dem','Ofe'}
@@ -37,9 +38,11 @@ function [T_erpt, T_diag] = build_erpt_comparison(ERPT_by_spec, Results_by_spec,
 %                        ERPT.shocks(k).name (default {'Cam','Dem','Ofe'})
 %
 %   ── Salidas ──────────────────────────────────────────────────────────────
-%     T_erpt   table -- shock | price_var | horizon | <spec>_median |
-%              <spec>_p_lo | <spec>_p_hi (bloque repetido por cada spec,
-%              en el orden de spec_names)
+%     T_erpt   table -- shock | price_var | horizon | <spec>_p_lo |
+%              <spec>_median | <spec>_p_hi (bloque repetido por cada spec,
+%              en el orden de spec_names; CAMBIO ERPT-Chat 5: orden de
+%              columnas pasa de median|p_lo|p_hi a p_lo|median|p_hi para
+%              lectura mas natural de izquierda a derecha)
 %     T_diag   table -- spec | nd | ne | ess_ratio | accept_rate | tiempo_s
 %
 %   Vive en projects/erpt/src/ (Tipo S — no toca src/ compartido, no
@@ -114,8 +117,8 @@ n_shocks   = numel(shock_names_sel);
 col_names = cell(1, n_specs * 3);
 for ss = 1:n_specs
     safe_sn = regexprep(spec_names{ss}, '[^a-zA-Z0-9_]', '_');
-    col_names{(ss-1)*3 + 1} = sprintf('%s_median', safe_sn);
-    col_names{(ss-1)*3 + 2} = sprintf('%s_p_lo', safe_sn);
+    col_names{(ss-1)*3 + 1} = sprintf('%s_p_lo', safe_sn);
+    col_names{(ss-1)*3 + 2} = sprintf('%s_median', safe_sn);
     col_names{(ss-1)*3 + 3} = sprintf('%s_p_hi', safe_sn);
 end
 
@@ -160,8 +163,8 @@ for kk = 1:n_shocks
 
                 h_idx = find(ERPT_ss.horizons == horizons(hh), 1);
 
-                data_cols{r, (ss-1)*3 + 1} = prices_arr(p_idx).median(h_idx);
-                data_cols{r, (ss-1)*3 + 2} = prices_arr(p_idx).band_lo(1, h_idx);
+                data_cols{r, (ss-1)*3 + 1} = prices_arr(p_idx).band_lo(1, h_idx);
+                data_cols{r, (ss-1)*3 + 2} = prices_arr(p_idx).median(h_idx);
                 data_cols{r, (ss-1)*3 + 3} = prices_arr(p_idx).band_hi(1, h_idx);
             end
         end
