@@ -15,6 +15,9 @@
 %     a Excel. Cfg.EXPORT_HORIZONS = Cfg.ERPT_HORIZONS (decision ERPT-Chat 5:
 %     restringir horizontes de export a los 5 de la tabla ERPT, por
 %     consistencia -- ver addendum CU-1 en Seccion A).
+%     plot_irfs.m (Chat 19/20) -- figuras IRF y CIRF por shock (Cfg.IRF_TYPE
+%     ='both' en las 4 specs), todos los horizontes nativos de Cfg.HORIZON
+%     (sin restriccion -- Cfg.EXPORT_HORIZONS solo afecta export_results.m).
 %     plot_fevd.m (Chat 19/20) -- figuras FEVD por variable, todos los
 %     horizontes nativos de Cfg.FEVD_HORIZONS (sin restriccion).
 %
@@ -97,6 +100,9 @@ for ss = 1:n_specs
     % -- Outputs individuales: export_results.m con horizontes restringidos --
     Cfg_spec.EXPORT_HORIZONS = Cfg_spec.ERPT_HORIZONS;
     export_results(Results_spec, Dataset_spec, Cfg_spec);
+
+    % -- Figuras IRF/CIRF por shock (Cfg.IRF_TYPE='both' en las 4 specs) -----
+    plot_irfs(Results_spec.LtildeStruct, Dataset_spec, Cfg_spec, Results_spec);
 
     % -- Figuras FEVD por variable (todos los horizontes nativos) -----------
     plot_fevd(Results_spec, Dataset_spec, Cfg_spec);
