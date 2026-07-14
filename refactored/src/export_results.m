@@ -45,6 +45,13 @@ function export_results(Results, Dataset, Cfg)
 %                        output/ del proyecto que llama (p.ej.
 %                        projects/bnw/output/). Si no está definido, se usa
 %                        el comportamiento legado: refactored/output/.
+%     EXPORT_HORIZONS    vector (OPCIONAL, ERPT-Chat 5) — subconjunto de
+%                        horizontes 0-based a incluir en irf_summary/
+%                        cirf_summary. Si no está definido (comportamiento
+%                        LEGADO sin cambios), se exportan TODOS los
+%                        horizontes 0:horizon_max, igual que antes de este
+%                        campo. No afecta fevd_summary (ver
+%                        Results.FEVD_horizons para eso).
 %
 %   El archivo se guarda en <OUTPUT_DIR o refactored/output>/tables/<SPEC_NAME>_results.xlsx
 
@@ -143,8 +150,19 @@ end
 nresp    = numel(response_idx);
 n_shocks = numel(shock_idx_resolved);
 
-% Todos los horizontes de 0 a horizon_max
-h_all  = 0:horizon_max;          % 0-based
+% Todos los horizontes de 0 a horizon_max, salvo que Cfg.EXPORT_HORIZONS
+% restrinja el subconjunto a exportar (ERPT-Chat 5; default = comportamiento
+% legado sin cambios).
+h_all = 0:horizon_max;          % 0-based
+if isfield(Cfg, 'EXPORT_HORIZONS') && ~isempty(Cfg.EXPORT_HORIZONS)
+    eh = Cfg.EXPORT_HORIZONS(:)';
+    if any(eh < 0) || any(eh > horizon_max)
+        error('export_results:badExportHorizons', ...
+            'Cfg.EXPORT_HORIZONS debe estar en [0, %d]. Recibido: %s.', ...
+            horizon_max, mat2str(eh));
+    end
+    h_all = unique(eh, 'stable');
+end
 h_idx  = h_all + 1;              % 1-based en el array
 nh     = numel(h_all);
 
@@ -234,7 +252,7 @@ meta_data = {
     'variables',        strjoin(all_labels, ', ');
     'irf_type',         irf_type;
     'cred_bands',       mat2str(cred_bands);
-    'horizons_export',  sprintf('0:%d (todos)', horizon_max);
+    'horizons_export',  mat2str(h_all);
     'hojas_irf',        strjoin(irf_sheet_names_preview, ', ');
     'hojas_cirf',       strjoin(cirf_sheet_names_preview, ', ');
     'fevd_shock_idx',   mat2str(Results.FEVD_shock_idx);
