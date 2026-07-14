@@ -30,7 +30,7 @@ function T = build_irf_comparison(Results_by_spec, Dataset_by_spec, Cfg_by_spec,
 %                       Cfg_by_spec.(spec_names{1}).ERPT_HORIZONS
 %
 %   ── Salida ───────────────────────────────────────────────────────────────
-%     T   table -- shock | variable | horizon | <spec>_median | <spec>_p_lo
+%     T   table -- shock | variable | horizon | <spec>_p_lo | <spec>_median
 %         | <spec>_p_hi (bloque repetido por cada spec, orden de spec_names)
 %
 %   Vive en projects/erpt/src/ (Tipo S -- no toca src/ compartido, no
@@ -156,8 +156,8 @@ end
 col_names = cell(1, n_specs * 3);
 for ss = 1:n_specs
     safe_sn = regexprep(spec_names{ss}, '[^a-zA-Z0-9_]', '_');
-    col_names{(ss-1)*3 + 1} = sprintf('%s_median', safe_sn);
-    col_names{(ss-1)*3 + 2} = sprintf('%s_p_lo', safe_sn);
+    col_names{(ss-1)*3 + 1} = sprintf('%s_p_lo', safe_sn);
+    col_names{(ss-1)*3 + 2} = sprintf('%s_median', safe_sn);
     col_names{(ss-1)*3 + 3} = sprintf('%s_p_hi', safe_sn);
 end
 
@@ -187,8 +187,8 @@ for kk = 1:n_shocks
                 sl      = irfs_kk(h_idx, vv, :);
                 cb      = cred_bands_ref;
 
-                data_cols{r, (ss-1)*3 + 1} = quantile(sl(:), 0.50);
-                data_cols{r, (ss-1)*3 + 2} = quantile(sl(:), cb(1));
+                data_cols{r, (ss-1)*3 + 1} = quantile(sl(:), cb(1));
+                data_cols{r, (ss-1)*3 + 2} = quantile(sl(:), 0.50);
                 data_cols{r, (ss-1)*3 + 3} = quantile(sl(:), cb(2));
             end
         end
