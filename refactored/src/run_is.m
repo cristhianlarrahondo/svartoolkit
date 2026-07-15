@@ -231,6 +231,23 @@ while record <= nd
 
 end  % while
 
+%% ── Guardia: ningun draw satisface las restricciones de signo ───────────
+% (CU-2, generico) Sin esta guardia, sum(uw)==0 produce imp_w = 0/0 = NaN
+% en toda la columna, ne = floor(1/NaN) = NaN, y el resampling de mas abajo
+% falla varios pasos despues dentro de randsample con un mensaje generico
+% de MATLAB ("W must contain non-negative values..."), sin indicar la
+% causa real. Se detiene aqui, en el punto exacto de la falla, con un
+% mensaje que apunta a Cfg.ND y Cfg.S.
+if sum(uw) == 0
+    error('run_is:noAcceptedDraws', ...
+        ['Ningun draw satisfizo las restricciones de signo declaradas en ' ...
+         'Cfg.S (0 de %d draws, Cfg.ND=%d). El importance sampler no puede ' ...
+         'calcular pesos normalizados ni continuar con el resampling. ' ...
+         'Aumente Cfg.ND, o revise que las restricciones de signo en Cfg.S ' ...
+         '(y las de cero en Cfg.Z) sean jointly compatibles entre los ' ...
+         'choques restringidos.'], nd, nd);
+end
+
 %% ── Normalizar pesos y calcular ESS ─────────────────────────────────────
 imp_w = uw / sum(uw);
 ne    = floor(1 / sum(imp_w.^2));   % effective sample size
@@ -338,6 +355,7 @@ if accept_rate_final < min_accept
 end
 
 end
+
 
 
 
