@@ -19,16 +19,27 @@
 %     independientemente con build_restriction_row. Verifica tamanos y
 %     contenido exacto (isequal).
 %
-%   BLOQUE 2 -- Smoke run end-to-end de los 16 (ND=3000, SOLO velocidad):
+%   BLOQUE 2 -- Smoke run end-to-end de los 16 (ND=20000, SOLO velocidad):
 %     load_data -> build_dummies (spot-check de ventanas aa/mm) ->
 %     validate_cfg -> build_posterior -> run_is -> calculate_erpt, sin
 %     error. Verifica 6 choques y 3 price_vars por spec, y que los 4
 %     choques nombrados Cam/Dem/Ofe/Mon esten presentes. NO es la corrida
-%     cientifica (esa es ND=3e5, el siguiente chat).
+%     cientifica (esa es ND=3e5, el siguiente chat). ND subido de 3000
+%     (ERPT-Chat 3) a 20000: con 4 choques restringidos la probabilidad
+%     conjunta de aceptacion es menor y 3000 produjo ne=0 en la primera
+%     corrida de este smoke.
 %
-%   BLOQUE 3 -- Casos de error esperados (4), con identificador explicito:
+%   BLOQUE 3 -- Casos de error esperados (5), con identificador explicito:
 %     minnesota sin lambda3, dummy con rango invertido, dummy fuera de
-%     muestra, build_restriction_row con var_idx fuera de rango.
+%     muestra, build_restriction_row con var_idx fuera de rango, y (CU-2,
+%     nuevo) restricciones de signo contradictorias -> run_is.m debe fallar
+%     con 'run_is:noAcceptedDraws' en vez de crashear en randsample.
+%
+%   NOTA Tipo R-core: este chat corrige un defecto real encontrado en
+%   run_is.m (crash con mensaje generico de MATLAB cuando 0 draws
+%   satisfacen las restricciones de signo). El BLOQUE 0 (regresion BNW
+%   completa, PFA+IS, ND nativo) es condicion de aprobacion obligatoria:
+%   si el fix rompe BNW, NO PASA sin excepcion aunque ERPT funcione.
 
 fprintf('\n');
 fprintf('======================================================\n');
@@ -254,8 +265,14 @@ for ss = 1:n_specs
     run(fullfile(PROJ_CFG, [spec_name '.m']));
 
     % Override SOLO para velocidad del smoke -- NO es la corrida cientifica.
-    Cfg.ND           = 3000;
-    Cfg.MAX_IS_DRAWS = 1000;
+    % ND subido de 3000 (ERPT-Chat 3) a 20000: con 4 choques restringidos
+    % (vs 3 antes -- D5 de ERPT-Chat 6) la probabilidad conjunta de que un
+    % draw satisfaga TODAS las restricciones de signo simultaneamente es
+    % menor, y ND=3000 produjo ne=0 en al menos un spec durante la primera
+    % corrida de este smoke (spec_A_base_mm_minn_lag2_v0). Ver guardia
+    % nueva en run_is.m (CU-2) para el caso ne=0 con mensaje explicito.
+    Cfg.ND           = 20000;
+    Cfg.MAX_IS_DRAWS = 2000;
     Cfg.PLOT_IRFS    = false;
     Cfg.SAVE_RESULTS = false;
     fprintf('  [Smoke] Cfg.ND=%d (solo velocidad, no cientifico)\n', Cfg.ND);
@@ -421,6 +438,37 @@ try
     fprintf('  [FAIL] build_restriction_row var_idx fuera de rango no genero error\n');
 catch ME
     fprintf('  [OK] build_restriction_row var_idx fuera de rango -> error esperado: %s\n', ME.identifier);
+end
+
+% Caso 5 (CU-2, regresion del bug encontrado en la primera corrida de este
+% smoke): restricciones de signo contradictorias -> 0 draws satisfacen ->
+% run_is.m debe fallar con error explicito (noAcceptedDraws), NO con el
+% crash generico de randsample ("W must contain non-negative values...").
+try
+    clear Cfg;
+    Cfg = struct();
+    run(fullfile(PROJ_CFG, 'spec_A_base_aa_diffuse_lag2_v0.m'));
+    Cfg.ND = 50; Cfg.MAX_IS_DRAWS = 20; Cfg.SAVE_RESULTS = false; Cfg.PLOT_IRFS = false;
+    nv = sum(strcmp(Cfg.VAR_ROLES, 'endogenous'));
+    nh = numel(Cfg.HORIZONS_RESTRICT);
+    % Forzar contradiccion: ner(+) Y ner(-) simultaneo en el mismo choque.
+    Cfg.S{1} = [ build_restriction_row(1, 1, nv, nh,  1); ...
+                 build_restriction_row(1, 1, nv, nh, -1) ];
+    Dataset_bad = load_data(Cfg);
+    Posterior_bad = build_posterior(Dataset_bad, Cfg);
+    rng('default'); rng(Cfg.SEED);
+    run_is(Posterior_bad, Cfg); %#ok<NASGU>
+    bloque3_ok = false;
+    bloque3_msgs{end+1} = 'restricciones de signo contradictorias: NO lanzo error (deberia)'; %#ok<AGROW>
+    fprintf('  [FAIL] restricciones contradictorias no genero error\n');
+catch ME
+    if strcmp(ME.identifier, 'run_is:noAcceptedDraws')
+        fprintf('  [OK] 0 draws aceptados -> error esperado y explicito: %s\n', ME.identifier);
+    else
+        bloque3_ok = false;
+        bloque3_msgs{end+1} = sprintf('restricciones contradictorias: error inesperado (%s), se esperaba run_is:noAcceptedDraws', ME.identifier); %#ok<AGROW>
+        fprintf('  [FAIL] error distinto al esperado: %s (%s)\n', ME.identifier, ME.message);
+    end
 end
 
 fprintf('\n');
