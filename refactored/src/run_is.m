@@ -232,7 +232,7 @@ while record <= nd
 end  % while
 
 %% ── Guardia: ningun draw satisface las restricciones de signo ───────────
-% (CU-2, generico) Sin esta guardia, sum(uw)==0 produce imp_w = 0/0 = NaN
+% (CU-1, generico) Sin esta guardia, sum(uw)==0 produce imp_w = 0/0 = NaN
 % en toda la columna, ne = floor(1/NaN) = NaN, y el resampling de mas abajo
 % falla varios pasos despues dentro de randsample con un mensaje generico
 % de MATLAB ("W must contain non-negative values..."), sin indicar la
