@@ -69,9 +69,30 @@ FOCUS_HORIZON     = 36;       % horizonte del digesto de consola (pass-through d
 FOCUS_PRICE_VAR   = 'con_inf';% price_var del digesto de consola (pass-through a inflacion al consumidor)
 
 % ND_OVERRIDES: subir ND objetivo de specs puntuales (vistos los ne reales).
-% Ejemplo: ND_OVERRIDES.spec_A_base_mm_diffuse_lag2_v0 = 1e6;
 % Dejar como struct() vacio para usar ND_DEFAULT en las 16.
+%
+% ── SEGUNDA PASADA ERPT-Chat 8 (vistos los ne de la 1a corrida a 3e5) ──────
+% 1a corrida: 10 specs con ne<200 y, sobre todo, las 4 *_mm_minn_* con
+% medianas erraticas de ERPT (denominador ner cerca de cero). Se suben a
+% 3e6 (~10x draws) las 12 specs "no limpias" = TODAS las mm (8) + las
+% base_aa (4). Las 4 rob_aa quedan en ND_DEFAULT=3e5 (unico grupo limpio:
+% ne 234-295, medianas pequenas y estables) y cargan del cache. El cache
+% ND-aware re-estima solo las 12 con override (3e6 > 3e5 cacheado).
+% NOTA: rng es determinista (rng('default');rng(SEED=0)) -> la corrida a
+% 3e6 es un superset de los draws de la de 3e5, reproducible.
 ND_OVERRIDES = struct();
+ND_OVERRIDES.spec_A_base_aa_diffuse_lag2_v0 = 3e6;
+ND_OVERRIDES.spec_A_base_aa_diffuse_lag4_v0 = 3e6;
+ND_OVERRIDES.spec_A_base_aa_minn_lag2_v0    = 3e6;
+ND_OVERRIDES.spec_A_base_aa_minn_lag4_v0    = 3e6;
+ND_OVERRIDES.spec_A_base_mm_diffuse_lag2_v0 = 3e6;
+ND_OVERRIDES.spec_A_base_mm_diffuse_lag4_v0 = 3e6;
+ND_OVERRIDES.spec_A_base_mm_minn_lag2_v0    = 3e6;
+ND_OVERRIDES.spec_A_base_mm_minn_lag4_v0    = 3e6;
+ND_OVERRIDES.spec_A_rob_mm_diffuse_lag2_v0  = 3e6;
+ND_OVERRIDES.spec_A_rob_mm_diffuse_lag4_v0  = 3e6;
+ND_OVERRIDES.spec_A_rob_mm_minn_lag2_v0     = 3e6;
+ND_OVERRIDES.spec_A_rob_mm_minn_lag4_v0     = 3e6;
 
 %% ── Rutas (F5 completo -> mfilename('fullpath') es confiable) ──────────────
 val_file      = mfilename('fullpath');
