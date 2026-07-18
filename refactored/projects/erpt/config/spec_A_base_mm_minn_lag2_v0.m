@@ -105,11 +105,9 @@ Cfg.S{3} = [ build_restriction_row(3, 1, n_vars, n_horizons, -1); ...
              build_restriction_row(5, 1, n_vars, n_horizons,  1) ];
 Cfg.Z{3} = [];
 
-% -- Shock 4: Mon (monetario contractivo) : pro(-), con(-), ea(-), ir(+) -
-Cfg.S{4} = [ build_restriction_row(3, 1, n_vars, n_horizons, -1); ...
-             build_restriction_row(4, 1, n_vars, n_horizons, -1); ...
-             build_restriction_row(5, 1, n_vars, n_horizons, -1); ...
-             build_restriction_row(6, 1, n_vars, n_horizons,  1) ];
+% -- Shock 4: Mon -- ELIMINADO de la identificacion (ERPT-Chat 9). Pasa a
+%   residual sin restriccion (S{4}/Z{4} vacios); ya no es un choque nombrado.
+Cfg.S{4} = [];
 Cfg.Z{4} = [];
 
 % -- Shocks 5, 6: residuales sin restriccion (quedan [] por cell init) ---
@@ -123,7 +121,7 @@ Cfg.PLOT_IRFS        = true;
 Cfg.SUMMARY_HORIZONS = [0 4 8 12 18 24];
 Cfg.CRED_BANDS       = [0.25 0.75];
 Cfg.SHOCK_IDX        = 'all';
-Cfg.SHOCK_NAMES      = {'Cam', 'Dem', 'Ofe', 'Mon'};
+Cfg.SHOCK_NAMES      = {'Cam', 'Dem', 'Ofe'};
 Cfg.IRF_TYPE         = 'both';   % irf, cirf, both
 Cfg.IRF_NORM         = 'none';
 Cfg.FEVD_HORIZONS    = 1:Cfg.HORIZON;
@@ -132,3 +130,4 @@ Cfg.FEVD_HORIZONS    = 1:Cfg.HORIZON;
 Cfg.ERPT_PRICE_VARS = {'imp_inf', 'pro_inf', 'con_inf'};
 Cfg.ERPT_DENOM_VAR  = 'ner';
 Cfg.ERPT_HORIZONS   = [3 6 12 24 36];
+
