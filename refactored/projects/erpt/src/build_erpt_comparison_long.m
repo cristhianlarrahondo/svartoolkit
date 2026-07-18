@@ -26,8 +26,9 @@ function T_long = build_erpt_comparison_long(ERPT_by_spec, spec_names, shock_nam
 %     spec_names       cell array de nombres de spec (orden de salida)
 %     shock_names_sel  (opcional) cell array de nombres de choque a incluir,
 %                      resueltos por NOMBRE contra ERPT.shocks(k).name
-%                      (default {'Cam','Dem','Ofe','Mon'} -- 4 choques
-%                      nombrados del Ejercicio A, D2 de ERPT-Chat 6).
+%                      (default {'Cam','Dem','Ofe'} -- 3 choques nombrados
+%                      del Ejercicio A tras eliminar Mon en ERPT-Chat 9;
+%                      antes de ERPT-Chat 9 el default incluia 'Mon').
 %
 %   ── Salida ───────────────────────────────────────────────────────────────
 %     T_long   table -- spec | shock | price_var | horizon | p_lo | median | p_hi
@@ -38,7 +39,7 @@ function T_long = build_erpt_comparison_long(ERPT_by_spec, spec_names, shock_nam
 %   Ver tambien: build_erpt_comparison.m, calculate_erpt.m
 
 if nargin < 3 || isempty(shock_names_sel)
-    shock_names_sel = {'Cam', 'Dem', 'Ofe', 'Mon'};
+    shock_names_sel = {'Cam', 'Dem', 'Ofe'};
 end
 if ~iscell(spec_names) || isempty(spec_names)
     error('build_erpt_comparison_long:badSpecNames', ...
@@ -121,3 +122,4 @@ T_long = table(spec_col(1:r), shock_col(1:r), price_col(1:r), hz_col(1:r), ...
     'VariableNames', {'spec', 'shock', 'price_var', 'horizon', 'p_lo', 'median', 'p_hi'});
 
 end
+
