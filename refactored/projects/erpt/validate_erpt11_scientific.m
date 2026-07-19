@@ -1,5 +1,6 @@
 %VALIDATE_ERPT11_SCIENTIFIC  ERPT-Chat 11 -- Opcion 4: corrida cientifica
-%   (Cfg.ND=3e6) de las 8 specs del grupo mm_minn/mm_niwcustom, tratando
+%   (Cfg.ND=3e5, ver nota abajo) de las 8 specs del grupo mm_minn/mm_niwcustom,
+%   tratando
 %   ambas familias como una COMPARACION EXPLICITA de robustez frente a la
 %   especificacion del prior (no se elige una y se descarta la otra):
 %
@@ -16,16 +17,33 @@
 %   load_data.m). Cache ND-aware identico al patron de validate_erpt8.m:
 %   una spec se reusa del cache solo si su ND cacheado >= ND objetivo,
 %   asi que el cache previo (ND=3e5, con el lambda1=0.1 ROTO para
-%   mm_minn, heredado de ERPT-Chat 9) se invalida automaticamente al
-%   pedir ND=3e6 -- no hace falta borrar cache a mano.
+%   mm_minn, heredado de ERPT-Chat 9) se invalida automaticamente si se
+%   sube el objetivo -- no hace falta borrar cache a mano.
 %
-%   Ejecutar COMPLETO (F5). Puede tomar bastante tiempo (varias decenas de
-%   minutos a horas, 8 specs x 3e6 draws candidatos). Es RESUMIBLE: como
-%   en Chat 8, save_erpt_run se llama por spec al terminar cada una.
+%   -- Por que ND=3e5 y NO 3e6 -----------------------------------------------
+%   El 3e6 aparecio originalmente en ERPT-Chat 8 como ND_OVERRIDES para
+%   specs con ne<200 bajo la matriz CON el choque Mon (4 choques, mas
+%   restricciones -> menor tasa de aceptacion). Esa pasada nunca se
+%   ejecuto: en el mismo chat se removio Mon (ERPT-Chat 9), lo cual
+%   mejoro la tasa de aceptacion 8-15x y dejo ne=1605-2828 a ND=3e5 (el
+%   ESTANDAR del resto del Ejercicio A) sin necesidad de mas draws. Los 8
+%   specs de este chat YA tienen Mon removido (3 choques nombrados) --
+%   viven en el regimen post-Chat 9, no en el que motivo el 3e6. Ademas,
+%   la tasa de aceptacion medida en el smoke de este chat (~1.1-1.3%)
+%   escala linealmente a un ne proyectado de ~1500-2600 a ND=3e5,
+%   consistente con el rango real de Chat 9. La inestabilidad de mm_minn
+%   (30% vs 88-97% de niw_custom) es un problema del PRIOR, no de ND --
+%   subir draws no lo resuelve, solo da mas precision a un ne que ya esta
+%   bien a 3e5. Por eso ND_DEFAULT=3e5 aqui, con ND_OVERRIDES disponible
+%   para subir puntualmente si alguna spec sale con ne bajo (mismo patron
+%   de Chat 8), en vez de forzar 3e6 en las 8 de entrada.
+%
+%   Ejecutar COMPLETO (F5). Es RESUMIBLE: como en Chat 8, save_erpt_run se
+%   llama por spec al terminar cada una.
 %
 %   -- Bloques ---------------------------------------------------------------
 %   BLOQUE 1 -- Las 8 specs, corrida cientifica: load_data -> validate_cfg ->
-%     build_posterior -> run_is (ND=3e6) -> calculate_erpt -> save_erpt_run.
+%     build_posterior -> run_is (ND=3e5) -> calculate_erpt -> save_erpt_run.
 %     Por spec, calcula tambien la fraccion de draws CRUDOS estables (misma
 %     logica reimplementada localmente que en validate_erpt11.m/diagnose_
 %     erpt11_niwcustom_sensitivity.m -- no se modifica check_stability.m).
@@ -37,14 +55,23 @@
 fprintf('\n');
 fprintf('======================================================\n');
 fprintf('   VALIDATE ERPT-CHAT 11 CIENTIFICO -- Opcion 4: 8 specs\n');
-fprintf('   (Minnesota corregida vs niw_custom psi=0.97), ND=3e6\n');
+fprintf('   (Minnesota corregida vs niw_custom psi=0.97), ND=3e5\n');
 fprintf('======================================================\n\n');
 
 %% -- Controles de corrida (editar aqui) ------------------------------------
 USE_CACHE       = true;      % true = reusar <OUTPUT_DIR>/results_is.mat si ND cacheado >= objetivo
-ND_DEFAULT      = 3e6;       % ND objetivo (corrida cientifica, Opcion 4)
+ND_DEFAULT      = 3e5;       % ND objetivo (estandar del Ejercicio A -- ver nota "Por que
+                              % ND=3e5 y NO 3e6" en la cabecera de este archivo)
+NE_WARN_THRESHOLD = 200;     % ne por debajo de esto -> advertencia (no reprueba, gate suave
+                              % igual que ERPT-Chat 8) -- senal para subir ND_OVERRIDES puntual
 FOCUS_HORIZON   = 36;        % horizonte del digesto de consola
 FOCUS_PRICE_VAR = 'con_inf'; % price_var del digesto de consola
+
+% ND_OVERRIDES: subir ND objetivo de specs puntuales si su ne resulta bajo.
+% Vacio por defecto -- la proyeccion (ne~1500-2600 a ND=3e5, ver cabecera)
+% no anticipa necesidad de override, pero queda disponible si el ne real
+% de alguna spec sale por debajo de NE_WARN_THRESHOLD.
+ND_OVERRIDES = struct();
 
 %% -- Rutas (F5 completo -> mfilename('fullpath') es confiable) -------------
 val_file      = mfilename('fullpath');
@@ -80,7 +107,7 @@ spec_names   = [minn_specs, niwc_specs];
 NAMED_SHOCKS = {'Cam', 'Dem', 'Ofe'};
 
 % =========================================================================
-%  BLOQUE 1 -- Las 8 specs, corrida cientifica (ND=3e6, cache ND-aware)
+%  BLOQUE 1 -- Las 8 specs, corrida cientifica (ND=3e5, cache ND-aware)
 % =========================================================================
 fprintf('======================================================\n');
 fprintf('  BLOQUE 1 -- 8 specs, ND=%g (cache ND-aware)\n', ND_DEFAULT);
@@ -88,6 +115,7 @@ fprintf('======================================================\n\n');
 
 bloque1_ok      = true;
 bloque1_msgs    = {};
+warn_low_ne     = {};
 Results_by_spec = struct();
 Dataset_by_spec = struct();
 Cfg_by_spec     = struct();
@@ -100,12 +128,18 @@ for ss = 1:numel(spec_names)
     fprintf('  [%d/%d] Spec: %s\n', ss, numel(spec_names), spec_name);
     fprintf('------------------------------------------------------\n');
 
+    % -- ND objetivo de esta spec (ND_DEFAULT salvo override) --------------
+    nd_target = ND_DEFAULT;
+    if isfield(ND_OVERRIDES, spec_name) && ~isempty(ND_OVERRIDES.(spec_name))
+        nd_target = ND_OVERRIDES.(spec_name);
+    end
+
     clear Cfg;
     Cfg = struct();
     run(fullfile(PROJ_CFG, [spec_name '.m']));
     Cfg.PLOT_IRFS    = false;
     Cfg.SAVE_RESULTS = false;
-    Cfg.ND           = ND_DEFAULT;
+    Cfg.ND           = nd_target;
 
     transform_type = 'mm';   % las 8 specs de este chat son todas m/m
 
@@ -117,12 +151,12 @@ for ss = 1:numel(spec_names)
             [Results_spec, ERPT_spec, Dataset_spec, Cfg_cached] = load_erpt_run(Cfg.OUTPUT_DIR);
             nd_cached = NaN;
             if isfield(Cfg_cached, 'ND'), nd_cached = Cfg_cached.ND; end
-            if ~isnan(nd_cached) && nd_cached >= ND_DEFAULT
+            if ~isnan(nd_cached) && nd_cached >= nd_target
                 used_cache = true;
                 Cfg = Cfg_cached;
-                fprintf('  [cache] ND cacheado (%g) >= objetivo (%g) -> reusando.\n', nd_cached, ND_DEFAULT);
+                fprintf('  [cache] ND cacheado (%g) >= objetivo (%g) -> reusando.\n', nd_cached, nd_target);
             else
-                fprintf('  [cache] ND cacheado (%g) < objetivo (%g) -> re-estimando.\n', nd_cached, ND_DEFAULT);
+                fprintf('  [cache] ND cacheado (%g) < objetivo (%g) -> re-estimando.\n', nd_cached, nd_target);
             end
         catch ME
             fprintf('  [ALERTA] No se pudo cargar cache (%s) -- re-estimando desde cero.\n', ME.message);
@@ -176,6 +210,12 @@ for ss = 1:numel(spec_names)
         bloque1_msgs{end+1} = sprintf('%s: ne=%d (sin draws efectivos)', spec_name, Results_spec.ne); %#ok<AGROW>
     end
 
+    % -- Gate SUAVE de ne (advertencia, no fallo -- mismo patron Chat 8) ---
+    if Results_spec.ne > 0 && Results_spec.ne < NE_WARN_THRESHOLD
+        warn_low_ne{end+1} = sprintf('%s (ne=%d, ND=%g) -- considerar ND_OVERRIDES', ...
+            spec_name, Results_spec.ne, Cfg.ND); %#ok<AGROW>
+    end
+
     % -- Estabilidad sobre los ND draws crudos (candidatos, pre-resampling)
     try
         frac_stable_by_spec.(spec_name) = p_local_check_stability(Results_spec, Cfg);
@@ -194,13 +234,24 @@ end
 
 if bloque1_ok
     fprintf('  >> BLOQUE 1: PASA -- las 8 specs corrieron (o cargaron del cache)\n');
-    fprintf('     con ND=%g y produjeron los 3 choques Cam/Dem/Ofe.\n\n', ND_DEFAULT);
+    fprintf('     con ND objetivo y produjeron los 3 choques Cam/Dem/Ofe.\n\n');
 else
     fprintf('  >> BLOQUE 1: NO PASA. Detalle:\n');
     for i = 1:numel(bloque1_msgs)
         fprintf('     - %s\n', bloque1_msgs{i});
     end
     fprintf('\n');
+end
+if ~isempty(warn_low_ne)
+    fprintf('  [ADVERTENCIA] ne < %d en %d spec(s) -- considerar ND_OVERRIDES y re-F5:\n', ...
+        NE_WARN_THRESHOLD, numel(warn_low_ne));
+    for i = 1:numel(warn_low_ne)
+        fprintf('     - %s\n', warn_low_ne{i});
+    end
+    fprintf('\n');
+else
+    fprintf('  ne >= %d en las 8 specs -- consistente con la proyeccion de la cabecera,\n', NE_WARN_THRESHOLD);
+    fprintf('  ND=3e5 fue suficiente sin necesidad de ND_OVERRIDES.\n\n');
 end
 
 % =========================================================================
