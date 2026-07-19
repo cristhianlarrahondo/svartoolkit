@@ -84,17 +84,19 @@ for ss = 1:numel(all_specs)
     fprintf('  Cfg_cached.SPEC_NAME (guardado dentro del .mat) : %s\n', Cfg_cached.SPEC_NAME);
     fprintf('  Coincide con nombre de archivo/carpeta          : %s\n', ...
         iif_local(strcmp(Cfg_cached.SPEC_NAME, spec_name), 'SI', 'NO -- ALERTA'));
-    fprintf('  Cfg_cached.PRIOR.type                           : %s\n', Cfg_cached.PRIOR.type);
 
-    if strcmp(Cfg_cached.PRIOR.type, 'minnesota')
-        fprintf('  Cfg_cached.PRIOR.lambda1                        : %.3f\n', Cfg_cached.PRIOR.lambda1);
-    elseif strcmp(Cfg_cached.PRIOR.type, 'niw_custom')
-        psi_diag = diag(Cfg_cached.PRIOR.Psi_bar);
-        fprintf('  diag(Cfg_cached.PRIOR.Psi_bar) (rezago-1 propio): %s\n', mat2str(psi_diag', 4));
-        fprintf('  (esperado: 0.97 en las 6 posiciones; si aparece 1.00, el cache\n');
-        fprintf('   corresponde en realidad a Minnesota puro, no a niw_custom)\n');
-    elseif strcmp(Cfg_cached.PRIOR.type, 'diffuse')
-        fprintf('  (prior diffuse -- sin hiperparametros de shrinkage)\n');
+    if ~isfield(Cfg_cached, 'PRIOR') || isempty(Cfg_cached.PRIOR)
+        fprintf('  Cfg_cached.PRIOR                                : (no definido -- prior diffuse, default del toolkit)\n');
+    else
+        fprintf('  Cfg_cached.PRIOR.type                           : %s\n', Cfg_cached.PRIOR.type);
+        if strcmp(Cfg_cached.PRIOR.type, 'minnesota')
+            fprintf('  Cfg_cached.PRIOR.lambda1                        : %.3f\n', Cfg_cached.PRIOR.lambda1);
+        elseif strcmp(Cfg_cached.PRIOR.type, 'niw_custom')
+            psi_diag = diag(Cfg_cached.PRIOR.Psi_bar);
+            fprintf('  diag(Cfg_cached.PRIOR.Psi_bar) (rezago-1 propio): %s\n', mat2str(psi_diag', 4));
+            fprintf('  (esperado: 0.97 en las 6 posiciones; si aparece 1.00, el cache\n');
+            fprintf('   corresponde en realidad a Minnesota puro, no a niw_custom)\n');
+        end
     end
 
     fprintf('  ND cacheado                                     : %g\n', Cfg_cached.ND);
