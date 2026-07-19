@@ -22,14 +22,24 @@
 %
 %   Ejecutar COMPLETO (F5). Pegar el output completo en el chat.
 
+%% -- Log a archivo (ademas de consola) -------------------------------------
+log_dir  = fullfile(fileparts(mfilename('fullpath')), 'output');
+if ~isfolder(log_dir), mkdir(log_dir); end
+log_path = fullfile(log_dir, 'diagnose_erpt12_dem_ner_sign_restriction_log.txt');
+if exist(log_path, 'file'), delete(log_path); end
+diary(log_path);
+diary on;
+cleanup_diary = onCleanup(@() diary('off'));
+
 fprintf('\n');
 fprintf('======================================================\n');
 fprintf('   DIAGNOSTICO ERPT-CHAT 12 -- restriccion ner en Dem\n');
 fprintf('   (apreciacion bajo demanda, a la Forbes 2018)\n');
 fprintf('======================================================\n\n');
+fprintf('  [Este output tambien se esta guardando en: %s ]\n\n', log_path);
 
 %% -- Controles -- CONFIRMAR SIGN_NER_DEM antes de correr ------------------
-ND_SMOKE     = 3000;
+ND_SMOKE     = 3e4;
 SIGN_NER_DEM = -1;   % ner(+)=depreciacion asumido -> apreciacion = -1
                      % CAMBIAR A +1 si en tu dataset ner(+) = apreciacion
 
@@ -125,7 +135,10 @@ for ss = 1:numel(test_specs)
 end
 
 fprintf('======================================================\n');
-fprintf('Pegar este output completo en el chat.\n\n');
+fprintf('Pegar este output completo en el chat.\n');
+fprintf('(o abrir y pegar: %s)\n\n', log_path);
+
+diary off;
 
 
 %% -- Helpers locales -------------------------------------------------------
