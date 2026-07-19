@@ -21,7 +21,17 @@
 %
 %   Matriz de restricciones: ROBUSTEZ (rob) (D2 de ERPT-Chat 6).
 %
-%   Prior: MINNESOTA con lambda1=0.1, lambda2=0.5, lambda3=2 (D3).
+%   Prior: MINNESOTA con lambda1=0.2, lambda2=0.5, lambda3=2 (D2-D4 de
+%   ERPT-Chat 10, aplicado en ERPT-Chat 11). CORRECCION: ERPT-Chat 6 (D3)
+%   habia bajado lambda1 de 0.2 a 0.1 justificandolo como "menor tightness",
+%   pero en la formula real de build_posterior.m Var_prior propto lambda1^2,
+%   por lo que lambda1 mas chico produce MAS shrinkage hacia RW, no menos --
+%   inversion de sentido confirmada en ERPT-Chat 10 (D1). El ajuste de Chat 6
+%   empujo la posterior hacia la frontera de inestabilidad (coef. propio=1)
+%   en vez de alejarla del punto OLS estable (~0.97). Se revierte a 0.2,
+%   el valor pre-existente al error (correccion minima defendible, no un
+%   valor ad hoc elegido para forzar el resultado). lambda2/lambda3 sin
+%   cambio (sin evidencia de que contribuyan al problema de estabilidad).
 %
 %   Dummies COVID (m/m): 2 pulses, ventanas de ERPT-Chat 3.
 %
@@ -56,12 +66,15 @@ Cfg.CONJUGATE    = 'structural';   % 'structural' | 'irfs'
 Cfg.ITER_SHOW    = 1000;
 
 % -- PRIOR (Chat 12 / build_posterior.m) --------------------------------
-% Minnesota con hiperparametros de D3 (ERPT-Chat 6), uniformes en los 8
-% specs minnesota: lambda3 1->2 (amortigua dinamica de lags altos),
-% lambda1 0.2->0.1 (menor tightness, dato mensual volatil), lambda2 sin
-% cambio. Ajuste a priori (no dirigido al resultado) -- ver .md ERPT-Chat 6.
+% Minnesota CORREGIDO en ERPT-Chat 11 (D2-D4, ERPT-Chat-10-discusion-cierre.md):
+% lambda1 revertido 0.1->0.2 (correccion de la inversion de sentido de
+% ERPT-Chat 6 D3 -- lambda1 mas chico = MAS shrinkage hacia RW, no menos,
+% ver ERPT-Chat 10 D1). lambda2/lambda3 sin cambio. Variante "Minnesota
+% corregida"; ver tambien la variante alternativa niw_custom (D5) en
+% spec_A_<base|rob>_mm_niwcustom_lag<N>_v0, con la misma varianza de prior
+% pero coeficiente propio de rezago-1 en 0.90 en vez de 1.0 (Psi_bar).
 Cfg.PRIOR.type    = 'minnesota';
-Cfg.PRIOR.lambda1 = 0.1;   % tightness
+Cfg.PRIOR.lambda1 = 0.2;   % tightness -- CORREGIDO en ERPT-Chat 11 (era 0.1)
 Cfg.PRIOR.lambda2 = 0.5;   % mezcla own/cross-variable
 Cfg.PRIOR.lambda3 = 2;     % lag decay
 
