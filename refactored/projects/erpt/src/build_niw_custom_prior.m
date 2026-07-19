@@ -1,9 +1,10 @@
-function PRIOR = build_niw_custom_prior(Cfg)
+function PRIOR = build_niw_custom_prior(Cfg, psi_own_lag1)
 %BUILD_NIW_CUSTOM_PRIOR  Construye Cfg.PRIOR para la variante 'niw_custom'
 %   de ERPT-Chat 11 (D5, ver ERPT-Chat-10-discusion-cierre.md), aplicada a
 %   los 4 specs spec_A_<base|rob>_mm_niwcustom_lag<2|4>_v0.
 %
 %   PRIOR = BUILD_NIW_CUSTOM_PRIOR(Cfg)
+%   PRIOR = BUILD_NIW_CUSTOM_PRIOR(Cfg, psi_own_lag1)
 %
 %   Diseno (D5): la UNICA diferencia entre esta variante y "Minnesota
 %   corregida" (lambda1=0.2, lambda2=0.5, lambda3=2, ERPT-Chat 11) debe ser
@@ -15,10 +16,17 @@ function PRIOR = build_niw_custom_prior(Cfg)
 %   build_posterior.m (Tipo S -- funcion nueva, propia de ERPT, en
 %   projects/erpt/src/, no en el core compartido).
 %
-%   Psi_bar: bloque de rezago-1 con coeficiente propio = 0.90 (por debajo
-%   del valor Minnesota estandar de caminata aleatoria, 1.0), dejando
-%   margen de estabilidad en la MEDIA del prior. Resto de Psi_bar en cero,
-%   mismo patron que Minnesota.
+%   Psi_bar: bloque de rezago-1 con coeficiente propio = psi_own_lag1 (por
+%   debajo del valor Minnesota estandar de caminata aleatoria, 1.0),
+%   dejando margen de estabilidad en la MEDIA del prior. Resto de Psi_bar
+%   en cero, mismo patron que Minnesota. Con psi_own_lag1=1.0 esta funcion
+%   reproduce EXACTAMENTE el prior 'minnesota' (mismo Omega_bar, misma
+%   Psi_bar, mismos nu_bar/Phi_bar vagos) -- util como caso de sanity check
+%   en el diagnostico de sensibilidad de ERPT-Chat 11 (Opcion 3).
+%
+%   psi_own_lag1 (opcional, default 0.90 -- valor D5 original): permite
+%   sensibilizar el desplazamiento de la media sin tocar los 4 specs ya
+%   committeados (que llaman a esta funcion con 1 solo argumento).
 %
 %   nu_bar=0, Phi_bar=zeros(n): vagos por defecto -- sin informacion
 %   adicional sobre Sigma, igual tratamiento que 'diffuse'/'minnesota'.
@@ -28,17 +36,22 @@ function PRIOR = build_niw_custom_prior(Cfg)
 %   Cfg.NEX, Cfg.SCALE_FACTOR, Cfg.DUMMIES.
 %
 %   Entrada:
-%     Cfg     struct de configuracion (parcial, con los campos de arriba)
+%     Cfg            struct de configuracion (parcial, con los campos de arriba)
+%     psi_own_lag1   escalar opcional, default 0.90 (D5)
 %
 %   Salida:
 %     PRIOR   struct listo para asignar a Cfg.PRIOR: .type='niw_custom',
 %             .nu_bar, .Phi_bar, .Psi_bar, .Omega_bar
 
+if nargin < 2 || isempty(psi_own_lag1)
+    psi_own_lag1 = 0.90;   % D5: valor original aprobado en ERPT-Chat 10
+end
+
 % -- Hiperparametros (D2-D5, ERPT-Chat-10-discusion-cierre.md) -----------
 LAMBDA1      = 0.2;    % D2: mismo valor que "Minnesota corregida" (ERPT-Chat 11)
 LAMBDA2      = 0.5;    % D4: sin cambio
 LAMBDA3      = 2;      % D3: sin cambio
-PSI_OWN_LAG1 = 0.90;   % D5: media de rezago-1 propio, por debajo de RW (1.0)
+PSI_OWN_LAG1 = psi_own_lag1;   % D5 (sensibilizable): media de rezago-1 propio
 
 % -- Cargar datos y replicar la construccion NO-PRIOR de build_posterior.m
 % (misma logica de Y/X, lags/constante/dummies; ver build_posterior.m
