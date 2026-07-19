@@ -91,8 +91,21 @@ spec_names_excluded = { ...
 
 NAMED_SHOCKS = {'Cam', 'Dem', 'Ofe'};
 
+% Specs cuyo cache NO es confiable (Cfg.PRIOR cambio in-place tras el
 fprintf('  Specs oficiales (16): %d aa_diffuse + %d aa_minn + %d mm_diffuse + %d mm_niwcustom\n\n', 4,4,4,4);
 fprintf('  Specs EXCLUIDAS (evidencia, no en tabla): %s\n\n', strjoin(spec_names_excluded, ', '));
+
+% Specs cuyo cache NO es confiable (Cfg.PRIOR cambio in-place tras el
+% commit de este chat: psi 0.97->0.90) -- se fuerza recalculo ignorando
+% el cache existente, sin importar su ND. El chequeo cache-first normal
+% (solo compara ND) no detecta este tipo de cambio -- ver hallazgo de
+% diagnose_erpt12_niwcustom_cache_integrity.m con mm_minn/lambda1.
+FORCE_RECOMPUTE = { ...
+    'spec_A_base_mm_niwcustom_lag2_v0', 'spec_A_base_mm_niwcustom_lag4_v0', ...
+    'spec_A_rob_mm_niwcustom_lag2_v0',  'spec_A_rob_mm_niwcustom_lag4_v0'  };
+
+fprintf('  Specs con recalculo FORZADO (cache invalidado por cambio de psi): %s\n\n', ...
+    strjoin(FORCE_RECOMPUTE, ', '));
 
 % =========================================================================
 %  BLOQUE 0 -- Regresion BNW IS (sanity -- este chat no toca el core)
@@ -174,8 +187,13 @@ for ss = 1:numel(spec_names)
 
     cache_path = fullfile(Cfg.OUTPUT_DIR, 'results_is.mat');
     used_cache = false;
+    force_recompute_this = ismember(spec_name, FORCE_RECOMPUTE);
 
-    if USE_CACHE && isfile(cache_path)
+    if force_recompute_this
+        fprintf('  [FORCE_RECOMPUTE] cache invalidado por cambio de Cfg.PRIOR -- recalculando desde cero.\n');
+    end
+
+    if USE_CACHE && ~force_recompute_this && isfile(cache_path)
         try
             [Results_spec, ERPT_spec, Dataset_spec, Cfg_cached] = load_erpt_run(Cfg.OUTPUT_DIR);
             nd_cached = NaN;
