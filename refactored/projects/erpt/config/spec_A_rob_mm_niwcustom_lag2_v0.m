@@ -28,10 +28,19 @@
 %   hiperparametros que Minnesota (lambda1=0.2, lambda2=0.5, lambda3=2)
 %   via build_niw_custom_prior.m (projects/erpt/src/, Tipo S -- no toca
 %   build_posterior.m). Unica diferencia real: Psi_bar tiene coeficiente
-%   propio de rezago-1 = 0.90 (en vez de 1.0), dejando margen de
-%   estabilidad en la MEDIA del prior, no solo en su varianza --
-%   comparacion limpia de un solo grado de libertad frente a Minnesota
-%   corregida. nu_bar=0, Phi_bar=zeros(n): vagos por defecto.
+%   propio de rezago-1 = 0.97 (en vez de 1.0), dejando margen de
+%   estabilidad en la MEDIA del prior, no solo en su varianza.
+%   VALOR AJUSTADO tras el diagnostico de sensibilidad de ERPT-Chat 11
+%   (Opcion 3, diagnose_erpt11_niwcustom_sensitivity.m): el valor D5
+%   original (0.90) daba 100%% estable pero era mas agresivo de lo
+%   necesario. La grilla [1.00 0.99 0.97 0.95 0.93 0.90] mostro que
+%   0.97 es el desplazamiento MENOS agresivo (mas cercano a la caminata
+%   aleatoria original) que ya cruza el umbral de 70%% en las 4 specs
+%   mm_niwcustom simultaneamente (minimo observado: 88.73%%, margen
+%   amplio sobre el umbral). Sanity check: psi=1.00 reprodujo
+%   exactamente el ~30%% ya medido para Minnesota corregida, confirmando
+%   que build_niw_custom_prior.m replica el Omega_bar correctamente.
+%   nu_bar=0, Phi_bar=zeros(n): vagos por defecto.
 %
 %   Dummies COVID (m/m): 2 pulses, ventanas de ERPT-Chat 3.
 %
@@ -68,8 +77,9 @@ Cfg.ITER_SHOW    = 1000;
 % -- PRIOR (build_niw_custom_prior.m / projects/erpt/src/, ERPT-Chat 11) -
 % Variante niw_custom de D5 (ERPT-Chat-10-discusion-cierre.md): misma
 % varianza de prior que Minnesota corregida (lambda1=0.2, lambda2=0.5,
-% lambda3=2), coeficiente propio de rezago-1 en la MEDIA = 0.90 (Psi_bar)
-% en vez de 1.0. La funcion helper replica la construccion OLS de
+% lambda3=2), coeficiente propio de rezago-1 en la MEDIA = 0.97 en vez de
+% 1.0 (Psi_bar) -- ajustado en ERPT-Chat 11 tras diagnostico de
+% sensibilidad, ver arriba. La funcion helper replica la construccion OLS de
 % build_posterior.m (sin modificarlo) para calcular Omega_bar con el
 % mismo sig2(j) que usaria la variante minnesota. Se llama al final de
 % este archivo (seccion ERPT), una vez que Cfg.NLAG/NEX/DUMMIES ya
@@ -90,7 +100,7 @@ Cfg.DUMMIES(2).date_end   = [2020, 6];
 
 % -- PRIOR: construir Cfg.PRIOR via helper (requiere NLAG/NEX/DUMMIES ya
 %   definidos arriba) -----------------------------------------------------
-Cfg.PRIOR = build_niw_custom_prior(Cfg);
+Cfg.PRIOR = build_niw_custom_prior(Cfg, 0.97);   % psi_own_lag1=0.97 (ERPT-Chat 11, sensibilidad)
 
 % -- RESTRICCIONES (Opcion B, set-identificada -- matriz rob) ---
 Cfg.HORIZONS_RESTRICT = 0;    % restricciones en horizonte 0
