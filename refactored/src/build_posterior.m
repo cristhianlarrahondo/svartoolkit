@@ -22,6 +22,31 @@ function PosteriorParams = build_posterior(Dataset, Cfg)
 %     'niw_custom'        — NIW informativo
 %     'natural_conjugate' — Minnesota en forma NIW estricta
 %
+%   NOTA sobre lambda1 (minnesota/natural_conjugate): controla la VARIANZA
+%   del prior alrededor de su media (Var_prior propto lambda1^2, ver
+%   Omega_bar_{l,j} = (lambda1/l^lambda3)^2 * sigma_j^2). lambda1 MAS CHICO
+%   produce MENOS varianza, es decir, MAS shrinkage hacia la media del
+%   prior (RW por defecto) -- no menos. Esta confusion (menor lambda1
+%   interpretado como "menor tightness") causo un error de calibracion real
+%   en un proyecto aplicado (ver ERPT-Chat-10-discusion-cierre.md, D1); no
+%   confundir tightness (lambda1) con la MEDIA de encogimiento
+%   (own_lag1_mean, ver abajo) -- son elecciones de diseno ortogonales.
+%
+%   Cfg.PRIOR.own_lag1_mean (opcional, minnesota/natural_conjugate):
+%   escalar o vector [n x 1]. Media del coeficiente propio de rezago-1 en
+%   Psi_bar (antes fija en 1.0 = caminata aleatoria exacta). Default = 1
+%   (retrocompatible). Motivacion: para variables ya expresadas como
+%   variaciones/tasas (no niveles), asumir RW como media del prior puede
+%   ser un supuesto cuestionable -- desplazar la media (ej. 0.97) deja
+%   margen de estabilidad dinamica sin cambiar la tightness (lambda1). Ver
+%   CU-k correspondiente para el caso aplicado que motivo este campo.
+%
+%   Cfg.PRIOR.sum_coefs_target (opcional, sims_zha): escalar o vector
+%   [n x 1]. Generalizacion analoga para el prior "suma de coeficientes"
+%   (dummy mu5): en vez de forzar sum_l B_l(j,j) = 1 (RW implicito sobre
+%   la suma de rezagos), permite un objetivo distinto. Default = 1
+%   (retrocompatible).
+%
 %   Dummies exogenas via Cfg.DUMMIES (struct array, ver build_dummies.m):
 %     Las dummies se construyen con build_dummies(Cfg, Dataset.dates) y se
 %     agregan al final de xt. El campo PosteriorParams.ndummies documenta
@@ -108,6 +133,8 @@ switch prior_type
         lambda2 = pr.lambda2;
         lambda3 = pr.lambda3;
 
+        own_lag1_mean = resolve_own_lag1_mean(pr, n);
+
         w = (1 + (n-1)*lambda2^2) / n;
 
         omega_bar_diag = zeros(m, 1);
@@ -124,7 +151,7 @@ switch prior_type
 
         PpsiBar = zeros(m, n);
         for j = 1:n
-            PpsiBar(j, j) = 1;
+            PpsiBar(j, j) = own_lag1_mean(j);
         end
 
         nnuBar  = 0;
@@ -137,6 +164,8 @@ switch prior_type
         check_required_fields(pr, {'mu5','mu6'}, 'sims_zha');
         mu5 = pr.mu5;
         mu6 = pr.mu6;
+
+        sum_coefs_target = resolve_own_lag1_mean(pr, n, 'sum_coefs_target');
 
         y0 = mean(num(1:p, :), 1);
         sigma_j = sqrt(sig2)';
@@ -151,11 +180,14 @@ switch prior_type
         y0_s = y0 ./ sigma_j;
 
         if mu5 > 0
-            Y_d1 = diag(y0_s) / mu5;
             X_d1 = zeros(n, m);
             for l = 1:p
                 X_d1(:, (l-1)*n+1:l*n) = diag(y0_s) / mu5;
             end
+            % Y_d1 escalado por sum_coefs_target: fuerza sum_l B_l(j,j) ~=
+            % sum_coefs_target(j) en vez de 1 (RW implicito sobre la suma
+            % de coeficientes propios a traves de los rezagos).
+            Y_d1 = diag(sum_coefs_target(:)' .* y0_s) / mu5;
         else
             Y_d1 = zeros(0, n);  X_d1 = zeros(0, m);
         end
@@ -210,6 +242,8 @@ switch prior_type
         lambda2 = pr.lambda2;
         lambda3 = pr.lambda3;
 
+        own_lag1_mean = resolve_own_lag1_mean(pr, n);
+
         if isfield(pr, 'nu_bar')
             nnuBar = pr.nu_bar;
         else
@@ -234,7 +268,7 @@ switch prior_type
 
         PpsiBar = zeros(m, n);
         for j = 1:n
-            PpsiBar(j, j) = 1;
+            PpsiBar(j, j) = own_lag1_mean(j);
         end
 
         PphiBar = diag(sig2) * (nnuBar - n - 1);
@@ -286,5 +320,33 @@ function check_required_fields(pr, fields, prior_name)
             error('build_posterior:missingHyperparameter', ...
                 'Prior "%s" requiere el campo Cfg.PRIOR.%s.', prior_name, fields{k});
         end
+    end
+end
+
+%% -- Helper: resolver own_lag1_mean / sum_coefs_target (escalar o vector)
+function delta = resolve_own_lag1_mean(pr, n, field_name)
+%RESOLVE_OWN_LAG1_MEAN  Resuelve el hiperparametro opcional que desplaza
+%   la media de encogimiento propia de rezago-1 (minnesota/
+%   natural_conjugate: 'own_lag1_mean'; sims_zha: 'sum_coefs_target').
+%   Acepta escalar (se replica a los n endogenas) o vector [n x 1]/[1 x n].
+%   Default: vector de 1's (RW exacto -- comportamiento IDENTICO al previo
+%   a este cambio, retrocompatible).
+    if nargin < 3 || isempty(field_name)
+        field_name = 'own_lag1_mean';
+    end
+    if isfield(pr, field_name)
+        delta = pr.(field_name);
+        if ~(isnumeric(delta) && (isscalar(delta) || numel(delta) == n))
+            error('build_posterior:badOwnLag1Mean', ...
+                'Cfg.PRIOR.%s debe ser escalar o vector numerico de %d elementos (numel=%d).', ...
+                field_name, n, numel(delta));
+        end
+        if isscalar(delta)
+            delta = repmat(delta, n, 1);
+        else
+            delta = delta(:);   % normalizar a columna
+        end
+    else
+        delta = ones(n, 1);
     end
 end
