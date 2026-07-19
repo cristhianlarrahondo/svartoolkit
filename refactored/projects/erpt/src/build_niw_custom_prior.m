@@ -105,7 +105,7 @@ for l = 1:p
 end
 omega_bar_diag(n*p+1 : end) = 1e6;   % constante y dummies: prior muy vaga
 
-% -- Psi_bar: rezago-1 propio = 0.90 (unica diferencia vs Minnesota) -----
+% -- Psi_bar: rezago-1 propio = psi_own_lag1 (unica diferencia vs Minnesota)
 Psi_bar = zeros(m, n);
 for j = 1:n
     Psi_bar(j, j) = PSI_OWN_LAG1;
