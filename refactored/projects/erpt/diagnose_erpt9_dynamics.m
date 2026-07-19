@@ -12,13 +12,22 @@
 %       valores ya interanuales -- un componente persistente en con_inf se
 %       amplifica mucho mas sumando 37 terminos que reconstruyendo 3
 %       bloques anuales.
-%   (2) ESTABILIDAD DE DRAWS CRUDOS (barato -- reutiliza check_stability.m
-%       del core SIN modificarlo, sobre el cache ya persistido). OJO —
-%       limitacion real: check_stability.m mide estabilidad sobre TODOS
-%       los Cfg.ND draws crudos del NIW (antes del filtro de signos y del
-%       resampling IS), no sobre el subconjunto ne que efectivamente
-%       alimenta el Ltilde final. Es un proxy de la poblacion candidata,
-%       no de los draws aceptados -- se reporta con esa salvedad.
+%   (2) ESTABILIDAD DE DRAWS CRUDOS (barato -- misma logica que
+%       check_stability.m del core, reimplementada LOCALMENTE en este
+%       script porque check_stability.m infiere el numero de lags
+%       asumiendo nex=Cfg.NEX (solo constante) y NO contempla las 2 dummies
+%       COVID exogenas de estas specs (Cfg.DUMMIES) -- con ellas,
+%       nex_total=Cfg.NEX+numel(Cfg.DUMMIES)=3, no 1, y check_stability.m
+%       falla al inferir p. No se modifica el archivo compartido (eso
+%       seria Tipo R-core); esta es una copia local de su misma formula de
+%       companion matrix, corregida solo en el conteo de exogenas, usada
+%       exclusivamente para este diagnostico exploratorio.
+%       OJO — misma limitacion conceptual que la funcion original: mide
+%       estabilidad sobre TODOS los Cfg.ND draws crudos del NIW (antes del
+%       filtro de signos y del resampling IS), no sobre el subconjunto ne
+%       que efectivamente alimenta el Ltilde final. Es un proxy de la
+%       poblacion candidata, no de los draws aceptados -- se reporta con
+%       esa salvedad.
 %   (3) ESTABILIDAD DEL PUNTO OLS (barato -- solo load_data+build_posterior,
 %       sin muestreo): eigenvalor maximo (modulo) de la companion matrix
 %       construida con el B de OLS crudo (antes de cualquier prior), igual
@@ -160,7 +169,9 @@ end
 %  (2) ESTABILIDAD DE DRAWS CRUDOS -- reutiliza check_stability.m (core)
 % =========================================================================
 fprintf('======================================================\n');
-fprintf('  (2) ESTABILIDAD DE DRAWS CRUDOS (check_stability.m, sin modificar)\n');
+fprintf('  (2) ESTABILIDAD DE DRAWS CRUDOS (logica de check_stability.m,\n');
+fprintf('  reimplementada LOCALMENTE por incompatibilidad con dummies -- ver\n');
+fprintf('  nota de cabecera. NO se modifico el archivo compartido del core.)\n');
 fprintf('  NOTA: mide sobre TODOS los Cfg.ND draws candidatos, no solo los ne\n');
 fprintf('  aceptados/resampleados -- proxy de la poblacion candidata.\n');
 fprintf('======================================================\n\n');
@@ -173,7 +184,7 @@ for ss = 1:numel(spec_names)
     out_dir = Cfg.OUTPUT_DIR;
     [Results_spec, ~, ~, Cfg_cached] = load_erpt_run(out_dir);
     Cfg_cached.SPEC_NAME = spec_name;   % por si el cache no lo trae explicito
-    check_stability(Results_spec, Cfg_cached);
+    p_local_check_stability(Results_spec, Cfg_cached);
 end
 
 % =========================================================================
@@ -244,4 +255,67 @@ function L = p_accumulate_local(irf_slice, transform_type, lag)
             error('diagnose_erpt9_dynamics:badTransform', ...
                 'transform_type interno invalido: ''%s''.', transform_type);
     end
+end
+
+function frac_stable = p_local_check_stability(Results, Cfg)
+%P_LOCAL_CHECK_STABILITY  Copia local de la logica de check_stability.m
+%   (core, sin modificar), con UNA correccion: nex_total incluye las
+%   dummies exogenas (Cfg.NEX + numel(Cfg.DUMMIES)), no solo Cfg.NEX. Ver
+%   nota de cabecera de este script para el motivo. Misma formula de
+%   companion matrix, mismo criterio |eig|<1, misma limitacion (mide sobre
+%   TODOS los draws crudos, no solo los aceptados/resampleados).
+    required = {'Bdraws', 'LtildeStruct'};
+    for ii = 1:numel(required)
+        if ~isfield(Results, required{ii})
+            error('p_local_check_stability:missingField', ...
+                'Results no contiene campo .%s.', required{ii});
+        end
+    end
+
+    Bdraws = Results.Bdraws;
+    nd     = numel(Bdraws);
+    n      = Results.LtildeStruct.nvar;
+
+    if isfield(Cfg, 'SPEC_NAME') && ~isempty(Cfg.SPEC_NAME)
+        spec_name = Cfg.SPEC_NAME;
+    else
+        spec_name = 'spec';
+    end
+
+    nex_const = 0;
+    if isfield(Cfg, 'NEX'), nex_const = Cfg.NEX; end
+    ndummies = 0;
+    if isfield(Cfg, 'DUMMIES'), ndummies = numel(Cfg.DUMMIES); end
+    nex_total = nex_const + ndummies;
+
+    B_example = Bdraws{1};
+    m_rows    = size(B_example, 1);
+    p = (m_rows - nex_total) / n;
+    if p ~= floor(p) || p < 1
+        error('p_local_check_stability:badDims', ...
+            'No se pudo inferir el numero de lags (m_rows=%d, n=%d, nex_total=%d).', ...
+            m_rows, n, nex_total);
+    end
+    p = round(p);
+
+    np = p * n;
+    F_lower = [eye(np - n), zeros(np - n, n)];
+
+    n_stable = 0;
+    for s = 1:nd
+        B_s = Bdraws{s};
+        B_lags = B_s(1:n*p, :);
+        F_top = zeros(n, np);
+        for l = 1:p
+            F_top(:, (l-1)*n+1:l*n) = B_lags((l-1)*n+1:l*n, :)';
+        end
+        F = [F_top; F_lower];
+        if max(abs(eig(F))) < 1
+            n_stable = n_stable + 1;
+        end
+    end
+    frac_stable = n_stable / nd;
+
+    fprintf('  %-32s draws=%d  estables=%d  frac=%.4f (%.2f%%)\n', ...
+        spec_name, nd, n_stable, frac_stable, 100*frac_stable);
 end
