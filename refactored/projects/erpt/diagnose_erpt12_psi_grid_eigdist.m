@@ -23,10 +23,22 @@
 %
 %   Ejecutar COMPLETO (F5). Pegar el output completo en el chat.
 
+%% -- Log a archivo (ademas de consola) -- evita perder output por
+%%    limite de scrollback del Command Window ------------------------------
+log_dir  = fullfile(fileparts(mfilename('fullpath')), 'output');
+if ~isfolder(log_dir), mkdir(log_dir); end
+log_path = fullfile(log_dir, 'diagnose_erpt12_psi_grid_eigdist_log.txt');
+if exist(log_path, 'file'), delete(log_path); end
+diary(log_path);
+diary on;
+cleanup_diary = onCleanup(@() diary('off'));   % se cierra aunque el script falle a mitad de camino
+
 fprintf('\n');
 fprintf('======================================================\n');
 fprintf('   DIAGNOSTICO ERPT-CHAT 12 -- grilla psi x distribucion eig\n');
 fprintf('======================================================\n\n');
+fprintf('  [Este output tambien se esta guardando en:\n');
+fprintf('   %s ]\n\n', log_path);
 
 %% -- Controles -----------------------------------------------------------
 ND_SMOKE = 3000;
@@ -178,7 +190,10 @@ fprintf('  mm produce una dinamica cerca de la frontera, independientemente de\n
 fprintf('  donde se posicione esa media dentro de [0.80, 0.97].\n\n');
 
 fprintf('======================================================\n');
-fprintf('Pegar este output completo en el chat.\n\n');
+fprintf('Pegar este output completo en el chat.\n');
+fprintf('(o abrir y pegar el contenido de: %s)\n\n', log_path);
+
+diary off;
 
 
 %% -- Helper local --------------------------------------------------------
