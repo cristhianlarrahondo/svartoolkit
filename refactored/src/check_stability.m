@@ -48,19 +48,28 @@ else
 end
 
 % Número de lags: inferir desde dimensiones de B
-% B tiene dimensiones [n*p + nex, n]; nex suele ser 1 (constante)
+% B tiene dimensiones [n*p + nex_total, n]; nex_total = constante + dummies
+% exogenas (Cfg.DUMMIES) -- ANTES solo se contaba Cfg.NEX (la constante),
+% lo cual fallaba al inferir p en specs con dummies exogenas (ej. dummies
+% COVID en ERPT); ver ERPT-Chat 11 y nota historica en
+% diagnose_erpt9_dynamics.m/ERPT-Chat 9, que reimplementaba esta misma
+% logica localmente por esta razon. Con Cfg.DUMMIES ausente o vacio,
+% nex_total = Cfg.NEX (comportamiento IDENTICO al previo, retrocompatible).
 B_example = Bdraws{1};
 m_rows    = size(B_example, 1);
-% m_rows = n*p + nex  →  p = (m_rows - nex) / n
-% nex se puede inferir desde Cfg si está disponible
 if isfield(Cfg, 'NEX')
-    nex = Cfg.NEX;
+    nex_const = Cfg.NEX;
 else
-    nex = 0;   % default conservador; sobreestima p si hay exógenas
+    nex_const = 0;   % default conservador; sobreestima p si hay exógenas
 end
+ndummies = 0;
+if isfield(Cfg, 'DUMMIES')
+    ndummies = numel(Cfg.DUMMIES);
+end
+nex = nex_const + ndummies;
 p = (m_rows - nex) / n;
 if p ~= floor(p) || p < 1
-    % Fallback: asumir nex=1 (constante)
+    % Fallback: asumir nex=1 (constante, sin dummies)
     nex = 1;
     p   = (m_rows - nex) / n;
     if p ~= floor(p) || p < 1
