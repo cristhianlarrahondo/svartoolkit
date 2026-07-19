@@ -100,7 +100,7 @@ Cfg.DUMMIES(2).date_end   = [2020, 6];
 
 % -- PRIOR: construir Cfg.PRIOR via helper (requiere NLAG/NEX/DUMMIES ya
 %   definidos arriba) -----------------------------------------------------
-Cfg.PRIOR = build_niw_custom_prior(Cfg, 0.97);   % psi_own_lag1=0.97 (ERPT-Chat 11, sensibilidad)
+Cfg.PRIOR = build_niw_custom_prior(Cfg, 0.90);   % psi_own_lag1=0.90 (ERPT-Chat 12: 0.97 concentraba masa cerca de la frontera max|eig|; 0.90 verificado via diagnose_erpt12_psi_grid_eigdist.m)
 
 % -- RESTRICCIONES (Opcion B, set-identificada -- matriz rob) ---
 Cfg.HORIZONS_RESTRICT = 0;    % restricciones en horizonte 0
