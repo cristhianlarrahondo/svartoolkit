@@ -85,9 +85,23 @@ PROJ_SRC      = fullfile(PROJ_ROOT, 'src');
 REF_SRC       = fullfile(REF_ROOT, 'src');
 REF_CFG_DIR   = fullfile(REF_ROOT, 'config');
 REF_HELP      = fullfile(REF_ROOT, 'helpfunctions');
+REF_VALIDATE  = fullfile(REF_ROOT, 'validate');   % validate_cfg.m vive aqui (ERPT-Chat 15,
+                                                    % hallazgo: faltaba en el addpath del cliente
+                                                    % Y del pool -- ver nota de PATH mas abajo)
 
 addpath(REF_SRC); addpath(REF_CFG_DIR); addpath(REF_HELP);
-addpath(PROJ_CFG); addpath(PROJ_SRC);
+addpath(REF_VALIDATE); addpath(PROJ_CFG); addpath(PROJ_SRC);
+
+% -- NOTA PATH (ERPT-Chat 15, corregido tras 1a corrida real) -------------
+% validate_cfg.m vive en refactored/validate/, una carpeta que ningun
+% validate_erptN.m anterior agregaba explicitamente via addpath -- las
+% corridas SECUENCIALES previas (Chat 8-14) funcionaban solo porque el
+% path persistente de la sesion local de MATLAB del usuario ya incluia esa
+% carpeta desde antes (fuera de estos scripts). Los workers de parfor
+% arrancan con un path LIMPIO, sin heredar el path persistente del
+% cliente -- solo reciben lo que se les propaga explicitamente via
+% pctRunOnAll (ver Bloque A). Sin esta linea, las 16 iteraciones fallaban
+% con "Undefined function 'validate_cfg'" al primer intento de recalculo.
 
 fprintf('  USE_CACHE         : %d\n', USE_CACHE);
 fprintf('  RUN_BNW_CHECK     : %d\n', RUN_BNW_CHECK);
@@ -143,6 +157,7 @@ if USE_PARALLEL
         pctRunOnAll(sprintf('addpath(''%s'');', REF_SRC));
         pctRunOnAll(sprintf('addpath(''%s'');', REF_CFG_DIR));
         pctRunOnAll(sprintf('addpath(''%s'');', REF_HELP));
+        pctRunOnAll(sprintf('addpath(''%s'');', REF_VALIDATE));
         pctRunOnAll(sprintf('addpath(''%s'');', PROJ_CFG));
         pctRunOnAll(sprintf('addpath(''%s'');', PROJ_SRC));
 
@@ -624,12 +639,24 @@ function out = local_run_spec(spec_name, PROJ_CFG, USE_CACHE, ND_TARGET)
 
         if USE_CACHE && isfile(cache_path)
             try
-                [Results_spec, ERPT_spec, Dataset_spec, Cfg_cached] = load_erpt_run(Cfg.OUTPUT_DIR);
+                % -- PEEK liviano: solo el campo Cfg del .mat, sin cargar
+                %    Results/ERPT/Dataset completos (que a ND alto pesan
+                %    cientos de MB) -- evita I/O desperdiciado y el mensaje
+                %    enganoso "[load_erpt_run] Cargado desde cache" cuando
+                %    el ND cacheado NO alcanza el objetivo y de todas formas
+                %    se va a recalcular desde cero.
+                peek = load(cache_path, 'Cfg');
                 nd_cached = NaN;
-                if isfield(Cfg_cached, 'ND'), nd_cached = Cfg_cached.ND; end
+                if isfield(peek, 'Cfg') && isfield(peek.Cfg, 'ND')
+                    nd_cached = peek.Cfg.ND;
+                end
                 if ~isnan(nd_cached) && nd_cached >= ND_TARGET
+                    [Results_spec, ERPT_spec, Dataset_spec, Cfg_cached] = load_erpt_run(Cfg.OUTPUT_DIR);
                     used_cache = true;
                     Cfg = Cfg_cached;
+                else
+                    fprintf('  [%s] cache a ND=%g < objetivo ND=%g -- recalculando desde cero (no se carga el .mat completo).\n', ...
+                        spec_name, nd_cached, ND_TARGET);
                 end
             catch
                 used_cache = false;
