@@ -16,8 +16,11 @@
 %     BLOQUE 2 -- Deep-dive de la spec ganadora:
 %                 (a) diagnosticos (ne, tasa aceptacion, frac. estable, Pareto-k)
 %                 (b) IRF + CIRF, bandas 68%/90%, 3 choques x 3 price_vars
-%                     (digesto compacto en consola + Excel completo)
-%                 (c) FEVD (plot_fevd, mismos horizontes de estimacion)
+%                     (digesto compacto en consola + figuras PNG + Excel)
+%                 (c) FEVD (plot_fevd, TODAS las variables endogenas --
+%                     ERPT-Chat 14 decision 5: el filtro a 3 price_vars
+%                     aplica solo a IRF/CIRF, no a FEVD -- mismos horizontes
+%                     de estimacion)
 %                 (d) ERPT, 5 horizontes de Cfg.ERPT_HORIZONS (bandas propias
 %                     de la spec, sin cambiar -- ya fijadas al cachear)
 %     BLOQUE 3 -- Anexo de robustez: tabla larga/tidy (16 specs, 3 choques,
@@ -213,7 +216,7 @@ try
     fprintf('  (ver detalle de check_stability / diagnose_is_weights arriba)\n\n');
 
     % ── (b) IRF + CIRF, bandas 68%/90%, 3 choques x 3 price_vars ────────
-    fprintf('  --- (b) IRF + CIRF (bandas 68%%/90%%, Cam/Dem/Ofe x imp_inf/pro_inf/con_inf) ---\n');
+    fprintf('  --- (b) IRF + CIRF (bandas 68%%/90%%, Cam/Dem/Ofe x imp_inf/pro_inf/con_inf; consola + PNG + Excel) ---\n');
     Cfg_disp             = Cfg_w;
     Cfg_disp.CRED_BANDS  = BAND_68_90;
     Cfg_disp.SHOCK_IDX   = shock_idx_w;
@@ -223,16 +226,22 @@ try
     print_summary(Results_w.LtildeStruct, Dataset_w, Cfg_disp);
     local_print_cirf_digest(Results_w.LtildeStruct, Dataset_w, Cfg_disp);
 
+    % Figuras PNG individuales de IRF/CIRF (una por choque) -- bandas 68/90,
+    % mismo subconjunto de choques/respuestas que el digesto de consola.
+    % (Precedente ERPT-Chat 5: esta llamada se omitio la primera vez y fue
+    % el unico fix real de esa iteracion -- no repetir el mismo olvido.)
+    plot_irfs(Results_w.LtildeStruct, Dataset_w, Cfg_disp, Results_w);
+
     % Excel completo (IRF+CIRF+FEVD+diagnosticos), bandas 68/90, mismo
     % subconjunto de choques/respuestas que el digesto de consola.
     export_results(Results_w, Dataset_w, Cfg_disp);
     fprintf('\n');
 
-    % ── (c) FEVD, mismos horizontes de estimacion ───────────────────────
-    fprintf('  --- (c) FEVD (Cam/Dem/Ofe x imp_inf/pro_inf/con_inf, horizontes de estimacion) ---\n');
-    Cfg_fevd          = Cfg_w;
-    Cfg_fevd.RESP_IDX = price_idx_w;
-    plot_fevd(Results_w, Dataset_w, Cfg_fevd);
+    % ── (c) FEVD, TODAS las variables endogenas, mismos horizontes de
+    %    estimacion (ERPT-Chat 14, decision 5: el calificador "3 price_vars"
+    %    aplica SOLO a IRF/CIRF, no a FEVD -- sin RESP_IDX, default = todas) ─
+    fprintf('  --- (c) FEVD (todas las variables endogenas, horizontes de estimacion) ---\n');
+    plot_fevd(Results_w, Dataset_w, Cfg_w);
     fprintf('\n');
 
     % ── (d) ERPT, 5 horizontes de Cfg.ERPT_HORIZONS, bandas propias ─────
