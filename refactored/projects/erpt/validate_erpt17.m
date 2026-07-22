@@ -191,15 +191,20 @@ try
     end
 
     % ── (a) Diagnosticos ────────────────────────────────────────────────
+    % NOTA (hallazgo de la 1a corrida): check_stability/diagnose_is_weights
+    % necesitan Results.Bdraws crudo, que local_run_spec() ya aligero
+    % (rmfield) antes de devolver Results_tot -- llamarlos de nuevo aqui
+    % falla con "Results no contiene campo .Bdraws". Se reportan los
+    % valores YA CALCULADOS en Bloque 1(a) (antes de aligerar, dentro de
+    % local_run_spec), sin volver a invocar ninguna funcion sobre el
+    % struct liviano.
     fprintf('  --- (a) Diagnosticos de corrida ---\n');
     ne_tot          = Results_tot.ne;
     accept_rate_tot = sum(Results_tot.uw > 0) / Cfg_tot.ND;
-    fprintf('  ne (draws efectivos)   : %d\n', ne_tot);
-    fprintf('  Tasa de aceptacion     : %.4f\n', accept_rate_tot);
-
-    stable_frac_tot = check_stability(Results_tot, Cfg_tot);
-    frac_top_tot    = diagnose_is_weights(Results_tot, Cfg_tot);
-    fprintf('  (ver detalle de check_stability / diagnose_is_weights arriba)\n\n');
+    fprintf('  ne (draws efectivos)      : %d\n', ne_tot);
+    fprintf('  Tasa de aceptacion        : %.4f\n', accept_rate_tot);
+    fprintf('  Fraccion draws estables   : %.4f (calculado en Bloque 1a, ver detalle arriba)\n', out_tot.stable_frac);
+    fprintf('  Fraccion peso IS en top-5%%: %.4f (calculado en Bloque 1a, ver detalle Pareto-k arriba)\n\n', out_tot.frac_top);
 
     % ── (b) IRF + CIRF, bandas 68%/90%, 3 choques x 3 price_vars ────────
     fprintf('  --- (b) IRF + CIRF (bandas 68%%/90%%, Cam/Dem/Ofe x imp_inf/pro_inf/con_inf; consola + PNG + Excel) ---\n');
@@ -328,7 +333,7 @@ function out = local_run_spec(spec_name, PROJ_CFG, USE_CACHE, ND_TARGET)
     out = struct('spec_name', spec_name, 'ok', true, 'err_msg', '', ...
         'used_cache', false, 'transform', transform_type, ...
         'Results', [], 'Dataset', [], 'Cfg', [], 'ERPT', [], ...
-        'stable_frac', NaN, 'accept_rate', NaN, 'ne', NaN);
+        'stable_frac', NaN, 'accept_rate', NaN, 'ne', NaN, 'frac_top', NaN);
 
     try
         Cfg = struct();
@@ -374,7 +379,16 @@ function out = local_run_spec(spec_name, PROJ_CFG, USE_CACHE, ND_TARGET)
             save_erpt_run(Results_spec, ERPT_spec, Dataset_spec, Cfg);
         end
 
+        % -- Diagnosticos que requieren los draws crudos (Results.Bdraws) --
+        %    DEBEN calcularse ANTES de aligerar Results_spec para el
+        %    retorno -- una vez aligerado, ningun bloque posterior de este
+        %    script (incluido Bloque 2a) puede volver a llamar
+        %    check_stability/diagnose_is_weights sobre el struct devuelto
+        %    (hallazgo de la 1a corrida: "Results no contiene campo
+        %    .Bdraws" -- ya estan persistidos en <OUTPUT_DIR>/results_is.mat
+        %    si se necesitan de nuevo, pero no viajan en el struct liviano).
         stable_frac = check_stability(Results_spec, Cfg);
+        frac_top    = diagnose_is_weights(Results_spec, Cfg);
         accept_rate = sum(Results_spec.uw > 0) / Cfg.ND;
         ne_val      = Results_spec.ne;
 
@@ -390,6 +404,7 @@ function out = local_run_spec(spec_name, PROJ_CFG, USE_CACHE, ND_TARGET)
         out.stable_frac = stable_frac;
         out.accept_rate = accept_rate;
         out.ne          = ne_val;
+        out.frac_top    = frac_top;
 
     catch ME
         out.ok      = false;
