@@ -38,6 +38,15 @@
 %
 %   Ejecutar COMPLETO (F5). Pegar el output de consola en el chat.
 
+%% -- Diary (ERPT-Chat 20, Frente 1): persistir consola a texto plano -------
+%   Arranca antes de toda salida para capturar la corrida integra (incluido
+%   el Pareto-k del Bloque 1). Cierre explicito al final del cuerpo del
+%   script. start_diary hace un 'diary off' defensivo, asi que un run previo
+%   fallido no contamina este log.
+PROJ_ROOT_early = fileparts(mfilename('fullpath'));
+addpath(fullfile(PROJ_ROOT_early, 'src'));
+log_path_diary  = start_diary(PROJ_ROOT_early, mfilename);
+
 fprintf('\n');
 fprintf('======================================================\n');
 fprintf('   VALIDATE ERPT-CHAT 19 -- Ejercicio C (3 sistemas)\n');
@@ -463,6 +472,10 @@ fprintf('   economica informativa, no un gate del veredicto.)\n');
 fprintf('======================================================\n\n');
 fprintf('Pegar este output completo en el chat para verificacion.\n\n');
 
+
+%% -- Cierre de diary (ERPT-Chat 20, Frente 1) ------------------------------
+diary('off');
+fprintf('[diary] Corrida persistida en:\n        %s\n\n', log_path_diary);
 
 %% ── Helpers locales ---------------------------------------------------------
 
