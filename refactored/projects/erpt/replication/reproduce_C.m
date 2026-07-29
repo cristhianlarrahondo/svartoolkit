@@ -50,13 +50,29 @@
 %   el Pareto-k del Bloque 1). Cierre explicito al final del cuerpo del
 %   script. start_diary hace un 'diary off' defensivo, asi que un run previo
 %   fallido no contamina este log.
-PROJ_ROOT_early = fileparts(mfilename('fullpath'));
-addpath(fullfile(PROJ_ROOT_early, 'src'));
-log_path_diary  = start_diary(PROJ_ROOT_early, mfilename);
+% -- Resolucion robusta de rutas (este master vive en projects/erpt/replication/) --
+%    mfilename('fullpath') puede devolver una copia temporal del Editor (ruta
+%    'Editor_XXXX' bajo tempdir) al ejecutar por secciones o un buffer no
+%    guardado; en ese caso se usa el nombre del archivo activo del Editor.
+this_file = mfilename('fullpath');
+if isempty(this_file) || contains(this_file, tempdir)
+    try
+        this_file = matlab.desktop.editor.getActiveFilename;
+    catch
+        error('reproduce_C:pathResolve', ['No pude resolver la ruta del script. ' ...
+            'Guarda reproduce_C.m y ejecutalo completo (F5) desde el Editor.']);
+    end
+end
+REPL_DIR      = fileparts(this_file);        % .../replication
+PROJ_ROOT     = fileparts(REPL_DIR);         % .../projects/erpt
+PROJECTS_ROOT = fileparts(PROJ_ROOT);        % .../projects
+REF_ROOT      = fileparts(PROJECTS_ROOT);    % .../refactored
+addpath(fullfile(PROJ_ROOT, 'src'));         % start_diary + erpt_* helpers
+log_path_diary  = start_diary(PROJ_ROOT, mfilename);
 
 fprintf('\n');
 fprintf('======================================================\n');
-fprintf('   VALIDATE ERPT-CHAT 19 -- Ejercicio C (3 sistemas)\n');
+fprintf('   REPRODUCE_C -- Ejercicio C (3 sistemas por tipo de inflacion)\n');
 fprintf('======================================================\n\n');
 
 %% Celda 1 -- Configuracion del ejercicio (controles de corrida) -----------
@@ -90,10 +106,7 @@ end
 fprintf('\n');
 
 %% ── Rutas -------------------------------------------------------------------
-val_file      = mfilename('fullpath');
-PROJ_ROOT     = fileparts(val_file);
-PROJECTS_ROOT = fileparts(PROJ_ROOT);
-REF_ROOT      = fileparts(PROJECTS_ROOT);
+% PROJ_ROOT / PROJECTS_ROOT / REF_ROOT ya resueltos en el preambulo del tope.
 PROJ_CFG      = fullfile(PROJ_ROOT, 'config');
 PROJ_SRC      = fullfile(PROJ_ROOT, 'src');
 REF_SRC       = fullfile(REF_ROOT, 'src');
@@ -125,10 +138,10 @@ try
 catch
 end
 for df = {'data_erpt_aa.xlsx','data_erpt_mm.xlsx'}
-    fpath = fullfile(PROJ_ROOT_early, 'data', df{1});
+    fpath = fullfile(PROJ_ROOT, 'data', df{1});
     fprintf('  MD5 %-18s: %s\n', df{1}, erpt_file_md5(fpath));
 end
-[st_git, sha_git] = system(sprintf('git -C "%s" rev-parse --short HEAD', PROJ_ROOT_early));
+[st_git, sha_git] = system(sprintf('git -C "%s" rev-parse --short HEAD', PROJ_ROOT));
 if st_git == 0
     fprintf('  Commit repo      : %s', sha_git);
 else
