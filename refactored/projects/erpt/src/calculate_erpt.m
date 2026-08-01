@@ -102,7 +102,17 @@ function ERPT = calculate_erpt(Results, Dataset, Cfg, transform_type, price_vars
 %   Vive en projects/erpt/src/calculate_erpt.m — NO toca src/ compartido,
 %   NO requiere regresion BNW (Tipo S, ver B.6 y cierre de ERPT-Chat 2).
 %
-%   Ver tambien: select_irfs.m, compute_cirfs.m, resolve_shock_name.m
+%   ── Nota 4 (ERPT-Chat 22) ────────────────────────────────────────────
+%   La reconstruccion de nivel L(h) (Nota 2) y el rezago a/a (Nota 2) ya
+%   NO son funciones locales de este archivo -- se extrajeron a
+%   accumulate_level.m / resolve_aa_lag.m (mismo projects/erpt/src/) para
+%   que build_level_response.m (Figura 2 del paper) las reutilice sin
+%   duplicar la logica. Este cambio es puro refactor (misma formula,
+%   mismo resultado numerico) -- ver regresion de medianas en
+%   validate_erpt22.m.
+%
+%   Ver tambien: select_irfs.m, compute_cirfs.m, resolve_shock_name.m,
+%   accumulate_level.m, resolve_aa_lag.m, build_level_response.m
 
 %% ── Defaults de argumentos opcionales (arg explicito > Cfg.ERPT_* > hardcoded) ─
 if nargin < 7 || isempty(horizons)
@@ -182,9 +192,9 @@ end
 nh    = numel(horizons);
 h_idx = horizons + 1;   % LtildeStruct.data: fila 1 = horizonte 0
 
-%% ── Rezago para reconstruccion a/a (Nota 2) ──────────────────────────────
+%% ── Rezago para reconstruccion a/a (Nota 2, ahora en resolve_aa_lag.m) ───
 if strcmp(transform_type, 'aa')
-    lag = p_resolve_aa_lag(Dataset);
+    lag = resolve_aa_lag(Dataset);
     if any(horizons < 0)
         error('calculate_erpt:badHorizons', 'horizons no puede ser negativo.');
     end
@@ -235,7 +245,7 @@ for j = 1:n_shocks
     label  = resolve_shock_name(shock_names, sidx);
     irfs_j = irfs_by_shock{j};   % [horizon+1 x numel(response_idx) x ndraws]
 
-    L_denom   = p_accumulate(irfs_j(:, pos_denom, :), transform_type, lag);
+    L_denom   = accumulate_level(irfs_j(:, pos_denom, :), transform_type, lag);
     L_denom_h = reshape(L_denom(h_idx, 1, :), nh, []);   % [nh x ndraws]
 
     shock_entry = struct('idx', sidx, 'name', label, ...
@@ -243,7 +253,7 @@ for j = 1:n_shocks
 
     for p = 1:n_prices
         pos_price = find(response_idx == price_idx(p), 1);
-        L_price   = p_accumulate(irfs_j(:, pos_price, :), transform_type, lag);
+        L_price   = accumulate_level(irfs_j(:, pos_price, :), transform_type, lag);
         L_price_h = reshape(L_price(h_idx, 1, :), nh, []);   % [nh x ndraws]
 
         % Decision 6: ratio POR DRAW, primero; sin filtrar denominadores
@@ -291,47 +301,4 @@ function idx = p_resolve_var_idx(var_names, name)
     end
 end
 
-function lag = p_resolve_aa_lag(Dataset)
-%P_RESOLVE_AA_LAG  Rezago de reconstruccion a/a segun Dataset.freq.
-    if ~isfield(Dataset, 'freq')
-        error('calculate_erpt:missingFreq', 'Dataset.freq no existe.');
-    end
-    switch Dataset.freq
-        case 'M'
-            lag = 12;
-        case 'Q'
-            lag = 4;
-        case 'A'
-            lag = 1;
-        otherwise
-            error('calculate_erpt:unknownFreq', ...
-                ['No se pudo derivar el rezago de reconstruccion a/a: ' ...
-                 'Dataset.freq = ''%s'' no reconocido (esperado M/Q/A).'], ...
-                Dataset.freq);
-    end
-end
 
-function L = p_accumulate(irf_slice, transform_type, lag)
-%P_ACCUMULATE  Nivel acumulado L(h) segun ERPT-Chat 1, decision 2.
-%
-%   irf_slice: [horizon+1 x 1 x ndraws]
-%   'mm': CIRF estandar (compute_cirfs.m, cumsum plano sobre dim 1)
-%   'aa': L(h) = IRF(h) para h < lag; L(h) = IRF(h) + L(h-lag) para h >= lag
-    switch transform_type
-        case 'mm'
-            L = compute_cirfs(irf_slice);
-        case 'aa'
-            H = size(irf_slice, 1);
-            L = zeros(size(irf_slice));
-            for h = 1:H   % h=1 <-> horizonte 0
-                if h <= lag
-                    L(h, 1, :) = irf_slice(h, 1, :);
-                else
-                    L(h, 1, :) = irf_slice(h, 1, :) + L(h - lag, 1, :);
-                end
-            end
-        otherwise
-            error('calculate_erpt:badTransform', ...
-                'transform_type interno invalido: ''%s''.', transform_type);
-    end
-end
