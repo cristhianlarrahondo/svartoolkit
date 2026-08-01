@@ -610,101 +610,25 @@ end
 
 function out = local_run_spec(spec_name, PROJ_CFG, USE_CACHE, ND_TARGET)
 %LOCAL_RUN_SPEC  Carga (cache-first) o corre una spec a ND_TARGET.
-%   Disenado para ejecutarse identico dentro de un cuerpo `for` o `parfor`
-%   -- cada llamada resetea su propio stream de RNG antes de invocar
-%   run_is (ver nota RNG en el encabezado de este archivo), por lo que el
-%   resultado es identico sin importar el orden de ejecucion o el worker
-%   que la procese.
+%   ERPT-Chat 22: delega en el helper compartido erpt_run_spec.m
+%   (projects/erpt/src/), promovido de este mismo local_run_spec en
+%   ERPT-Chat 20 pero huerfano desde entonces (ver cierre de ERPT-Chat 20,
+%   seccion 5). Wiring de dedup, sin cambio de comportamiento: opts
+%   replica exactamente el modo batch de este archivo (Cfg.PLOT_IRFS=false,
+%   Cfg.SAVE_RESULTS=false via quiet_cfg=true; sin diagnose_is_weights via
+%   compute_frac_top=false, igual que antes -- este script no lo llamaba).
+%   Unico cambio de forma: `out` ahora trae ademas el campo `frac_top`
+%   (NaN, porque compute_frac_top=false), inofensivo para el llamador
+%   (spec_out{ss} = local_run_spec(...); r = spec_out{ss}; r.<campo>),
+%   que nunca accedia a out.frac_top en este archivo.
+%
+%   Reset determinista de RNG por spec (`rng('default'); rng(Cfg.SEED)`)
+%   inmediatamente antes de run_is preservado sin cambios dentro de
+%   erpt_run_spec.m -- el resultado numerico sigue siendo identico sin
+%   importar el orden de ejecucion o el worker que lo procese.
 
-    if contains(spec_name, '_aa_')
-        transform_type = 'aa';
-    else
-        transform_type = 'mm';
-    end
-
-    out = struct('spec_name', spec_name, 'ok', true, 'err_msg', '', ...
-        'used_cache', false, 'transform', transform_type, ...
-        'Results', [], 'Dataset', [], 'Cfg', [], 'ERPT', [], ...
-        'stable_frac', NaN, 'accept_rate', NaN, 'ne', NaN);
-
-    try
-        Cfg = struct();
-        run(fullfile(PROJ_CFG, [spec_name '.m']));
-        Cfg.PLOT_IRFS    = false;
-        Cfg.SAVE_RESULTS = false;
-
-        cache_path = fullfile(Cfg.OUTPUT_DIR, 'results_is.mat');
-        used_cache = false;
-        Results_spec = []; ERPT_spec = []; Dataset_spec = [];
-
-        if USE_CACHE && isfile(cache_path)
-            try
-                % -- PEEK liviano: solo el campo Cfg del .mat, sin cargar
-                %    Results/ERPT/Dataset completos (que a ND alto pesan
-                %    cientos de MB) -- evita I/O desperdiciado y el mensaje
-                %    enganoso "[load_erpt_run] Cargado desde cache" cuando
-                %    el ND cacheado NO alcanza el objetivo y de todas formas
-                %    se va a recalcular desde cero.
-                peek = load(cache_path, 'Cfg');
-                nd_cached = NaN;
-                if isfield(peek, 'Cfg') && isfield(peek.Cfg, 'ND')
-                    nd_cached = peek.Cfg.ND;
-                end
-                if ~isnan(nd_cached) && nd_cached >= ND_TARGET
-                    [Results_spec, ERPT_spec, Dataset_spec, Cfg_cached] = load_erpt_run(Cfg.OUTPUT_DIR);
-                    used_cache = true;
-                    Cfg = Cfg_cached;
-                else
-                    fprintf('  [%s] cache a ND=%g < objetivo ND=%g -- recalculando desde cero (no se carga el .mat completo).\n', ...
-                        spec_name, nd_cached, ND_TARGET);
-                end
-            catch
-                used_cache = false;
-            end
-        end
-
-        if ~used_cache
-            Cfg.ND = ND_TARGET;
-            Dataset_spec = load_data(Cfg);
-            validate_cfg(Cfg, Dataset_spec);
-            Posterior_spec = build_posterior(Dataset_spec, Cfg);
-
-            % -- RESET DETERMINISTA POR SPEC (ver nota RNG del encabezado) --
-            rng('default'); rng(Cfg.SEED);
-            tic;
-            Results_spec = run_is(Posterior_spec, Cfg);
-            Results_spec.t_elapsed = toc;
-
-            ERPT_spec = calculate_erpt(Results_spec, Dataset_spec, Cfg, transform_type);
-            save_erpt_run(Results_spec, ERPT_spec, Dataset_spec, Cfg);
-        end
-
-        % -- Diagnosticos que requieren los draws crudos (Results.Bdraws) --
-        %    Deben calcularse ANTES de aligerar Results_spec para el
-        %    retorno -- ya quedaron persistidos en disco via save_erpt_run
-        %    (o ya estaban persistidos, si vino de cache).
-        stable_frac = check_stability(Results_spec, Cfg);
-        accept_rate = sum(Results_spec.uw > 0) / Cfg.ND;
-        ne_val      = Results_spec.ne;
-
-        % -- Aligerar antes de devolver del worker/iteracion (ver nota de
-        %    memoria del encabezado) -- Bdraws/Sigmadraws/Qdraws de tamano
-        %    ND ya estan en <OUTPUT_DIR>/results_is.mat, no se pierden.
-        Results_light = rmfield(Results_spec, {'Bdraws', 'Sigmadraws', 'Qdraws'});
-
-        out.used_cache  = used_cache;
-        out.Results     = Results_light;
-        out.Dataset     = Dataset_spec;
-        out.Cfg         = Cfg;
-        out.ERPT        = ERPT_spec;
-        out.stable_frac = stable_frac;
-        out.accept_rate = accept_rate;
-        out.ne          = ne_val;
-
-    catch ME
-        out.ok      = false;
-        out.err_msg = ME.message;
-    end
+    out = erpt_run_spec(spec_name, PROJ_CFG, USE_CACHE, ND_TARGET, ...
+        struct('compute_frac_top', false, 'quiet_cfg', true));
 end
 
 function L = local_denom_level(Results, Dataset, Cfg, h_target)
@@ -763,3 +687,4 @@ function L = local_denom_level(Results, Dataset, Cfg, h_target)
     h_idx = h_target + 1;
     L = reshape(Lfull(h_idx, 1, :), 1, []);
 end
+
