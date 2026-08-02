@@ -31,6 +31,16 @@ Cfg.RESP_IDX  = 2;                   % solo la variable de precio del sistema (i
 Cfg.IRF_TYPE  = 'irf';               % sin CIRF generica (retirada, Chat 21 decision 2)
 fprintf('\n=== Ejercicio C | inflacion: %s | spec: %s ===\n', inflacion, spec);
 
+% -- Limpiar figuras cirf_*.png de corridas anteriores (pre-Chat 22) --
+old_cirf_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+old_cirf = dir(fullfile(old_cirf_dir, 'cirf_*.png'));
+for kk = 1:numel(old_cirf)
+    delete(fullfile(old_cirf(kk).folder, old_cirf(kk).name));
+end
+if ~isempty(old_cirf)
+    fprintf('  [limpieza] %d figura(s) cirf_*.png retirada(s) de %s\n\n', numel(old_cirf), old_cirf_dir);
+end
+
 %% PASO 2 -- Estimar el SVAR bayesiano (o cargar si ya se estimo)
 cache = fullfile(Cfg.OUTPUT_DIR, 'results_is.mat');
 if usar_cache && exist(cache, 'file')
@@ -62,4 +72,8 @@ mostrar_nivel(Results, Dataset, Cfg, bandas, [{'ner'}, precio]);   % tabla nivel
 graficar_nivel(Results, Dataset, Cfg, bandas, [{'ner'}, precio]);  % figura nivel L(h) (incluye panel ner)
 
 %% PASO 5 -- Descomposicion de varianza (FEVD, todas las variables/choques)
-graficar_fevd(Results, Dataset, Cfg);
+%   Cfg.RESP_IDX se restringio arriba SOLO para Figura 1 (IRF); FEVD debe
+%   cubrir TODAS las variables endogenas (decision de ERPT-Chat 16).
+Cfg_fevd = Cfg;
+Cfg_fevd.RESP_IDX = [];
+graficar_fevd(Results, Dataset, Cfg_fevd);
