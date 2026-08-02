@@ -129,7 +129,7 @@ Cfg.PLOT_IRFS        = true;
 Cfg.SUMMARY_HORIZONS = [0 4 8 12 18 24];
 Cfg.CRED_BANDS       = [0.25 0.75];
 Cfg.SHOCK_IDX        = 'all';
-Cfg.SHOCK_NAMES      = {'Cam', 'Ofe', 'Dem'};   % orden por conteo de ceros desc.
+Cfg.SHOCK_NAMES      = {'Exchange Rate', 'Supply', 'Demand'};   % orden por conteo de ceros desc. (ERPT-Chat 22: labels en ingles; internamente Cam/Ofe/Dem)
 Cfg.IRF_TYPE         = 'both';   % irf, cirf, both
 Cfg.IRF_NORM         = 'none';
 Cfg.FEVD_HORIZONS    = 1:Cfg.HORIZON;
@@ -138,3 +138,4 @@ Cfg.FEVD_HORIZONS    = 1:Cfg.HORIZON;
 Cfg.ERPT_PRICE_VARS = {'imp_inf'};   % una sola variable de precio por sistema
 Cfg.ERPT_DENOM_VAR  = 'ner';
 Cfg.ERPT_HORIZONS   = [3 6 12 24 36];
+
