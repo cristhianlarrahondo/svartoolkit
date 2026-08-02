@@ -4,8 +4,9 @@
 %   Referencia: jerarquia imp>pro>con, cercana a la ganadora (Ejercicio A).
 %
 %   ERPT-Chat 22: banda unica 68% (ERPT-Chat 21 decision 1); choques
-%   restringidos a Cam/Dem/Ofe; CIRF generica retirada, reemplazada por
-%   Figura 2 (nivel L(h), ERPT-Chat 21 decision 2).
+%   restringidos a Cam/Dem/Ofe; CIRF generica retirada, sin reemplazo --
+%   Figura 2 (nivel L(h)) se implemento y luego se descarto en este mismo
+%   chat (patron de "diente de sierra" real, ver nota en analisis_A.m).
 
 %% PASO 0 -- Botones (edita aqui)
 spec       = 'spec_B_rob_aa_diffuse_lag4_tot_v0';     % ganadora + ToT (7a variable)
@@ -21,14 +22,15 @@ Cfg.RESP_IDX  = [2 3 4];             % solo las 3 inflaciones (imp_inf,pro_inf,c
 Cfg.IRF_TYPE  = 'irf';               % sin CIRF generica (retirada, Chat 21 decision 2)
 fprintf('\n=== Ejercicio B (ToT) | spec: %s ===\n', spec);
 
-% -- Limpiar figuras cirf_*.png de corridas anteriores (pre-Chat 22) --
-old_cirf_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
-old_cirf = dir(fullfile(old_cirf_dir, 'cirf_*.png'));
-for kk = 1:numel(old_cirf)
-    delete(fullfile(old_cirf(kk).folder, old_cirf(kk).name));
+% -- Limpiar figuras cirf_*.png (retirada) y nivel_*.png (Figura 2,
+%    descartada -- ver nota en analisis_A.m) de corridas anteriores --
+old_fig_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+old_stale = [dir(fullfile(old_fig_dir, 'cirf_*.png')); dir(fullfile(old_fig_dir, 'nivel_*.png'))];
+for kk = 1:numel(old_stale)
+    delete(fullfile(old_stale(kk).folder, old_stale(kk).name));
 end
-if ~isempty(old_cirf)
-    fprintf('  [limpieza] %d figura(s) cirf_*.png retirada(s) de %s\n\n', numel(old_cirf), old_cirf_dir);
+if ~isempty(old_stale)
+    fprintf('  [limpieza] %d figura(s) retirada(s) (cirf_*/nivel_*) de %s\n\n', numel(old_stale), old_fig_dir);
 end
 
 %% PASO 2 -- Estimar el SVAR bayesiano (o cargar si ya se estimo)
@@ -55,11 +57,9 @@ ERPT = calculate_erpt(Results, Dataset, Cfg, 'aa');
 %% PASO 3 -- Exchange Rate Pass-Through (el resultado principal)
 mostrar_erpt(ERPT, shocks, precio);
 
-%% PASO 4 -- Respuestas al impulso (IRF) y nivel acumulado (Figura 2)
+%% PASO 4 -- Respuestas al impulso (IRF)
 mostrar_irf(Results, Dataset, Cfg, bandas);     % tabla IRF
 graficar_irf(Results, Dataset, Cfg, bandas);    % figura IRF
-mostrar_nivel(Results, Dataset, Cfg, bandas);   % tabla nivel L(h)
-graficar_nivel(Results, Dataset, Cfg, bandas);  % figura nivel L(h) (incluye panel ner)
 
 %% PASO 5 -- Descomposicion de varianza (FEVD, todas las variables/choques)
 %   Cfg.RESP_IDX se restringio arriba SOLO para Figura 1 (IRF); FEVD debe
