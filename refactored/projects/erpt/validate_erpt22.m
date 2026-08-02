@@ -76,7 +76,7 @@ V = {'FAIL', 'OK  '};
 TOL = 1e-9;   % tolerancia para invariantes numericos exactos (misma formula)
 
 BANDS_NEW = [0.16 0.84];
-NAMED_SHOCKS = {'Cam', 'Dem', 'Ofe'};
+NAMED_SHOCKS = {'Exchange Rate', 'Demand', 'Supply'};
 
 % =========================================================================
 %  BLOQUE 1 -- Regresion de medianas (invariante ante cambio de bandas)
@@ -86,15 +86,15 @@ fprintf('  BLOQUE 1 -- Regresion de medianas @ 68%% (cache-only)\n');
 fprintf('======================================================\n\n');
 
 SPECS_CHECK(1) = struct('spec', 'spec_A_rob_aa_diffuse_lag4_v0', ...
-    'transform', 'aa', 'shock_names_order', {{'Cam','Dem','Ofe'}});
+    'transform', 'aa', 'shock_names_order', {{'Exchange Rate','Demand','Supply'}});
 SPECS_CHECK(2) = struct('spec', 'spec_B_rob_aa_diffuse_lag4_tot_v0', ...
-    'transform', 'aa', 'shock_names_order', {{'Cam','Dem','Ofe'}});
+    'transform', 'aa', 'shock_names_order', {{'Exchange Rate','Demand','Supply'}});
 SPECS_CHECK(3) = struct('spec', 'spec_C_rob_aa_diffuse_lag4_imp_v0', ...
-    'transform', 'aa', 'shock_names_order', {{'Cam','Ofe','Dem'}});
+    'transform', 'aa', 'shock_names_order', {{'Exchange Rate','Supply','Demand'}});
 SPECS_CHECK(4) = struct('spec', 'spec_C_rob_aa_diffuse_lag4_pro_v0', ...
-    'transform', 'aa', 'shock_names_order', {{'Cam','Dem','Ofe'}});
+    'transform', 'aa', 'shock_names_order', {{'Exchange Rate','Demand','Supply'}});
 SPECS_CHECK(5) = struct('spec', 'spec_C_rob_aa_diffuse_lag4_con_v0', ...
-    'transform', 'aa', 'shock_names_order', {{'Cam','Dem','Ofe'}});
+    'transform', 'aa', 'shock_names_order', {{'Exchange Rate','Demand','Supply'}});
 
 bloque1_ok = true;
 for ii = 1:numel(SPECS_CHECK)
@@ -113,12 +113,21 @@ for ii = 1:numel(SPECS_CHECK)
 
     names_old = {ERPT_old.shocks.name};
     names_new = {ERPT_new.shocks.name};
+    idx_old   = [ERPT_old.shocks.idx];
+    idx_new   = [ERPT_new.shocks.idx];
     max_diff  = 0;
-    for kk = 1:numel(NAMED_SHOCKS)
-        k_old = find(strcmp(names_old, NAMED_SHOCKS{kk}), 1);
-        k_new = find(strcmp(names_new, NAMED_SHOCKS{kk}), 1);
+    % -- Emparejar por INDICE de choque (1,2,3 = los 3 nombrados), no por
+    %    nombre: Cfg_new hereda Cfg_cached.SHOCK_NAMES (el que estaba
+    %    persistido en el .mat cuando se corrio por ultima vez), que puede
+    %    diferir del de la spec .m actual (p.ej. tras el relabel a ingles
+    %    de ERPT-Chat 22) -- emparejar por nombre contra NAMED_SHOCKS
+    %    (ingles) no encontraria nada en un cache viejo con nombres en
+    %    espanol, dando un PASA vacio y enganoso.
+    for sidx = 1:3
+        k_old = find(idx_old == sidx, 1);
+        k_new = find(idx_new == sidx, 1);
         if isempty(k_old) || isempty(k_new)
-            continue;   % choque no nombrado en este sistema (p.ej. Mon ya eliminado)
+            continue;   % choque no presente en este sistema
         end
         prices_old = ERPT_old.shocks(k_old).prices;
         prices_new = ERPT_new.shocks(k_new).prices;
@@ -219,13 +228,15 @@ if isfile(cache_a)
     %    de-razones de ERPT, en los horizontes de la Tabla 1.
     ERPT_a = calculate_erpt(Results_a, Dataset_a, Cfg_a_cached, 'aa');
     names_a = {ERPT_a.shocks.name};
+    idx_a   = [ERPT_a.shocks.idx];
     fprintf('\n  (c) Informativo -- razon-de-medianas(L(h)) vs mediana-de-razones(ERPT):\n');
     fprintf('      (se espera una diferencia pequena pero no-nula: son objetos\n');
     fprintf('       estadisticos distintos, ver ERPT-Chat 1 decision 6 / desigualdad de Jensen)\n');
-    for kk = 1:numel(NAMED_SHOCKS)
-        k_idx = find(strcmp(names_a, NAMED_SHOCKS{kk}), 1);
+    for sidx = 1:3
+        k_idx = find(idx_a == sidx, 1);
         if isempty(k_idx); continue; end
-        j_lvl = find(shock_idx_resolved_a == ERPT_a.shocks(k_idx).idx, 1);
+        label_sidx = resolve_shock_name(Cfg_a.SHOCK_NAMES, sidx);   % label actual (spec fresca), solo para imprimir
+        j_lvl = find(shock_idx_resolved_a == sidx, 1);
         prices_arr = ERPT_a.shocks(k_idx).prices;
         p_idx = find(strcmp({prices_arr.var}, 'imp_inf'), 1);
         for hh_target = [3 6 12 24 36]
@@ -235,8 +246,8 @@ if isfile(cache_a)
             med_imp = quantile(reshape(L_imp_by_shock{j_lvl}(h_idx_lvl,1,:),1,[]), 0.50);
             ratio_of_medians = med_imp / med_ner;
             median_of_ratios = prices_arr(p_idx).median(h_erpt);
-            fprintf('      %-4s h=%-2d  razon-de-medianas=%7.4f  mediana-de-razones(ERPT)=%7.4f  diff=%7.4f\n', ...
-                NAMED_SHOCKS{kk}, hh_target, ratio_of_medians, median_of_ratios, ...
+            fprintf('      %-14s h=%-2d  razon-de-medianas=%7.4f  mediana-de-razones(ERPT)=%7.4f  diff=%7.4f\n', ...
+                label_sidx, hh_target, ratio_of_medians, median_of_ratios, ...
                 ratio_of_medians - median_of_ratios);
         end
     end
