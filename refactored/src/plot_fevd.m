@@ -27,12 +27,42 @@ function plot_fevd(Results, Dataset, Cfg)
 %   por shock — ver discusión con el usuario): 'fevd_var<K>_<VARNAME>.png',
 %   con K = indice ordinal real de la variable (1..nvar).
 %
-%   ORDEN DE LEYENDA (Chat 20): primero los shocks CON nombre real
-%   (Cfg.SHOCK_NAMES), preservando su orden relativo; luego los que
-%   quedaron con el nombre default 'shockN' (sin identificar); "Resto (no
-%   identificado)" siempre al final. Los colores de cada segmento de la
-%   barra se reordenan junto con la leyenda para mantener la
-%   correspondencia color-nombre.
+%   ORDEN DE LEYENDA / AGREGACION (Chat 20, revisado ERPT-Chat 22): primero
+%   los shocks CON nombre real (Cfg.SHOCK_NAMES), preservando su orden
+%   relativo; TODO lo demas se colapsa en UNA sola barra "Resto (no
+%   identificado)" -- ya no se muestra cada shock sin nombre por separado.
+%
+%   ── Por que colapsar en una sola barra (ERPT-Chat 22) ───────────────────
+%   Los segmentos se apilan por MEDIANA de cada shock (no por la media),
+%   y la mediana NO es un operador lineal: la suma de las medianas
+%   marginales de N shocks generalmente NO da la mediana de su suma (que
+%   si es 1 en cada draw, por construccion). ARW (2018) no tiene este
+%   problema porque en su aplicacion solo reportan el FEVD de UN choque
+%   identificado (Tabla III del paper) -- nunca suman contribuciones de
+%   varios shocks. Forbes, Hjortsoe & Nenova (2018) si presentan una
+%   tabla con 6 shocks sumando ~100% (su Tabla 2), pero lo logran usando
+%   el PROMEDIO entre draws, no la mediana -- la media SI es lineal, asi
+%   que si cada draw suma exactamente 1, el promedio de shocks tambien.
+%   Dado que este toolkit usa mediana en TODO el reporte (IRF, ERPT, FEVD)
+%   por ser mas robusta que la media frente a colas pesadas de IS
+%   (Pareto-k>>1 ya documentado en el proyecto ERPT), la brecha entre "1"
+%   y la suma de medianas de los shocks SIN restricciones economicas
+%   (que ademas ni siquiera tienen una identidad estable entre draws en
+%   un sistema set-identificado) no se puede eliminar sin cambiar de
+%   mediana a media -- y cambiar a media reintroduce sensibilidad a los
+%   pocos draws de peso alto que la mediana evita. La solucion adoptada:
+%   mostrar SOLO los shocks con nombre economico como barras individuales,
+%   y agrupar en una unica barra "Unidentified" tanto los shocks sin
+%   nombre como la brecha de no-aditividad de la mediana -- ambos son,
+%   en la practica, la misma clase de "variacion no atribuible a un shock
+%   con interpretacion economica".
+%
+%   FALLBACK (sin shocks nombrados): si Cfg.SHOCK_NAMES no esta definido o
+%   ningun shock tiene nombre (is_named todos false -- p.ej. BNW/oil_market
+%   con un solo shock identificado sin nombre asignado), se conserva el
+%   comportamiento ANTERIOR: cada shock se muestra individualmente (no
+%   tiene sentido colapsar todo en una sola barra cuando no hay ninguna
+%   distincion nombrado/no-nombrado que trazar).
 %
 %   SIN SUBTITULO DE MODO (Chat 20): el titulo ya NO incluye "Modo:
 %   PFA/IS" — esa identificacion la da el NOMBRE DEL ARCHIVO (via
@@ -121,14 +151,17 @@ for jj = 1:n_shocks_calc
     is_named(jj) = ~isempty(shock_names) && idx_shock <= numel(shock_names) && ~isempty(shock_names{idx_shock});
 end
 
-% Orden de leyenda: primero los shocks CON nombre real (Cfg.SHOCK_NAMES),
-% preservando su orden relativo; luego los que quedaron con el nombre
-% default 'shockN' (sin identificar), preservando su orden relativo;
-% "Resto (no identificado)" se agrega SIEMPRE al final, fuera de este
-% orden. Se reordenan labels/colores JUNTOS para que el color de cada
-% segmento en la barra siga correspondiendo a su entrada en la leyenda.
-legend_perm = [find(is_named), find(~is_named)];
-label_shock = label_shock_raw(legend_perm);
+% Solo se muestran individualmente los shocks CON nombre real; todo lo
+% demas (shocks sin nombre + brecha de no-aditividad de la mediana, ver
+% docstring) se colapsa en una unica barra "Resto (no identificado)".
+% FALLBACK: si ningun shock esta nombrado, se conserva el comportamiento
+% anterior (todos individuales) -- no hay nada que colapsar.
+named_idx = find(is_named);
+if isempty(named_idx)
+    named_idx = 1:n_shocks_calc;   % fallback: sin nombres, todos individuales
+end
+label_shock = label_shock_raw(named_idx);
+n_named     = numel(named_idx);
 
 %% ── Paths de salida ──────────────────────────────────────────────────────
 if isfield(Cfg, 'OUTPUT_DIR') && ~isempty(Cfg.OUTPUT_DIR)
@@ -145,14 +178,13 @@ fontsize_title = 9;
 fontsize_axes  = 8;
 axiswidth      = 1;
 color_rest     = [0.80 0.80 0.80];   % gris — "resto no identificado"
-shock_colors   = lines(max(n_shocks_calc, 1));   % paleta MATLAB estandar
+shock_colors   = lines(max(n_named, 1));   % paleta MATLAB estandar (solo shocks nombrados)
 
 % Numero de columnas de la leyenda (Chat 19/20: reparto automatico en
 % filas via 'NumColumns' en vez de 'Orientation','horizontal', que forzaba
-% una sola fila y desbordaba/apretaba con muchos shocks — p.ej. 6+1 items
-% en el caso ERPT). Tope de 4 columnas por fila; con menos items que eso,
-% una sola fila (comportamiento previo, sin cambios visuales).
-n_legend_items = n_shocks_calc + 1;   % + 1 por "Resto"
+% una sola fila y desbordaba/apretaba con muchos shocks). Tope de 4
+% columnas por fila; con menos items que eso, una sola fila.
+n_legend_items = n_named + 1;   % + 1 por "Resto"
 legend_ncols   = min(n_legend_items, 4);
 legend_nrows   = ceil(n_legend_items / legend_ncols);
 % Alto extra de figura por cada fila adicional de leyenda, para que no
@@ -163,11 +195,13 @@ fig_height = 340 + 40 * (legend_nrows - 1);
 for kk = 1:nresp
     v_idx = response_idx(kk);
 
-    % Medianas [n_h x n_shocks_calc], YA en el orden de leyenda (legend_perm):
-    % identificados primero, luego sin identificar. "Resto" se agrega aparte.
-    med_mat = zeros(n_h, n_shocks_calc);
-    for pp = 1:n_shocks_calc
-        jj = legend_perm(pp);   % indice ORIGINAL en FEVD/fevd_shock_idx
+    % Medianas [n_h x n_named], SOLO de los shocks con nombre real (o
+    % todos, en el fallback sin nombres -- ver docstring). Todo lo demas
+    % (shocks sin nombre + brecha de no-aditividad de la mediana) se
+    % colapsa en rest_vec.
+    med_mat = zeros(n_h, n_named);
+    for pp = 1:n_named
+        jj = named_idx(pp);   % indice ORIGINAL en FEVD/fevd_shock_idx
         for hh_i = 1:n_h
             sl = FEVD(v_idx, jj, hh_i, :);
             med_mat(hh_i, pp) = quantile(sl(:), 0.50);
@@ -181,8 +215,8 @@ for kk = 1:nresp
 
     bar_data = [med_mat, rest_vec];
     hbars = bar(ax, fevd_horizons, bar_data, 'stacked', 'EdgeColor', 'none');
-    for pp = 1:n_shocks_calc
-        hbars(pp).FaceColor = shock_colors(legend_perm(pp), :);
+    for pp = 1:n_named
+        hbars(pp).FaceColor = shock_colors(pp, :);
     end
     hbars(end).FaceColor = color_rest;
 
@@ -213,3 +247,4 @@ for kk = 1:nresp
 end
 
 end
+
