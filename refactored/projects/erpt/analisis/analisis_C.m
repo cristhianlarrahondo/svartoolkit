@@ -78,3 +78,18 @@ graficar_irf(Results, Dataset, Cfg, bandas);    % figura IRF
 Cfg_fevd = Cfg;
 Cfg_fevd.RESP_IDX = [];
 graficar_fevd(Results, Dataset, Cfg_fevd);
+
+%% PASO 6 -- Exportar a Excel (IRF + FEVD completos, y Tabla ERPT)
+%   Ver nota completa en analisis_A.m. Sin Cfg.EXPORT_HORIZONS -- exporta
+%   TODOS los horizontes (0:36); Cfg_fevd (sin RESP_IDX) para que
+%   irf_summary/fevd_summary cubran las 5 variables endogenas del sistema.
+export_results(Results, Dataset, Cfg_fevd);
+
+ERPT_by_spec_C = struct();
+ERPT_by_spec_C.(spec) = ERPT;
+T_erpt_C = build_erpt_comparison_long(ERPT_by_spec_C, {spec}, shocks);
+tables_dir_C = fullfile(Cfg.OUTPUT_DIR, 'tables');
+if ~isfolder(tables_dir_C); mkdir(tables_dir_C); end
+erpt_xlsx_C = fullfile(tables_dir_C, [Cfg.SPEC_NAME, '_erpt_table.xlsx']);
+writetable(T_erpt_C, erpt_xlsx_C);
+fprintf('  Tabla ERPT exportada: %s\n\n', erpt_xlsx_C);
