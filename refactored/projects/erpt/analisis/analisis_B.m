@@ -33,6 +33,14 @@ if ~isempty(old_stale)
     fprintf('  [limpieza] %d figura(s) retirada(s) (cirf_*/nivel_*) de %s\n\n', numel(old_stale), old_fig_dir);
 end
 
+% -- Limpiar el <SPEC_NAME>_erpt_table.xlsx suelto de la version anterior
+%    (round 6): ahora es una hoja de <SPEC_NAME>_results.xlsx --
+old_erpt_xlsx = fullfile(Cfg.OUTPUT_DIR, 'tables', [Cfg.SPEC_NAME, '_erpt_table.xlsx']);
+if isfile(old_erpt_xlsx)
+    delete(old_erpt_xlsx);
+    fprintf('  [limpieza] archivo suelto retirado: %s\n\n', old_erpt_xlsx);
+end
+
 %% PASO 2 -- Estimar el SVAR bayesiano (o cargar si ya se estimo)
 cache = fullfile(Cfg.OUTPUT_DIR, 'results_is.mat');
 if usar_cache && exist(cache, 'file')
@@ -68,17 +76,15 @@ Cfg_fevd = Cfg;
 Cfg_fevd.RESP_IDX = [];
 graficar_fevd(Results, Dataset, Cfg_fevd);
 
-%% PASO 6 -- Exportar a Excel (IRF + FEVD completos, y Tabla ERPT)
-%   Ver nota completa en analisis_A.m. Sin Cfg.EXPORT_HORIZONS -- exporta
-%   TODOS los horizontes (0:36); Cfg_fevd (sin RESP_IDX) para que
-%   irf_summary/fevd_summary cubran las 7 variables endogenas.
+%% PASO 6 -- Exportar TODO a un solo Excel (IRF + FEVD + Tabla ERPT)
+%   Ver nota completa en analisis_A.m. UN solo archivo <SPEC_NAME>_results.xlsx
+%   con hojas metadata/irf_summary/fevd_summary/run_diagnostics (export_results.m,
+%   core) + erpt_summary (Tabla ERPT, agregada aparte al mismo archivo).
 export_results(Results, Dataset, Cfg_fevd);
 
 ERPT_by_spec_B = struct();
 ERPT_by_spec_B.(spec) = ERPT;
 T_erpt_B = build_erpt_comparison_long(ERPT_by_spec_B, {spec}, shocks);
-tables_dir_B = fullfile(Cfg.OUTPUT_DIR, 'tables');
-if ~isfolder(tables_dir_B); mkdir(tables_dir_B); end
-erpt_xlsx_B = fullfile(tables_dir_B, [Cfg.SPEC_NAME, '_erpt_table.xlsx']);
-writetable(T_erpt_B, erpt_xlsx_B);
-fprintf('  Tabla ERPT exportada: %s\n\n', erpt_xlsx_B);
+results_xlsx_B = fullfile(Cfg.OUTPUT_DIR, 'tables', [Cfg.SPEC_NAME, '_results.xlsx']);
+writetable(T_erpt_B, results_xlsx_B, 'Sheet', 'erpt_summary', 'WriteVariableNames', true);
+fprintf('  Hoja erpt_summary agregada a: %s\n\n', results_xlsx_B);
