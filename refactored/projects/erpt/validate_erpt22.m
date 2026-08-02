@@ -362,21 +362,31 @@ for aa = 1:numel(ANALISIS_FILES)
         n_endo_expected = sum(strcmp(Dataset.var_roles, 'endogenous'));
         ok_fevd_all = numel(fevd_pngs) == n_endo_expected;
 
-        % -- Round 6: exportacion a Excel (Tabla ERPT + IRF/FEVD completo
-        %    via export_results.m) -- antes no se guardaba nada en disco --
+        % -- Round 7: exportacion a UN solo Excel (Tabla ERPT como hoja
+        %    erpt_summary, agregada al mismo <SPEC_NAME>_results.xlsx que
+        %    export_results.m ya genera para IRF/FEVD) -- antes no se
+        %    guardaba nada en disco, y en la 1a iteracion de esto quedaron
+        %    2 archivos separados por error (correccion del usuario).
         tables_dir_check = fullfile(Cfg.OUTPUT_DIR, 'tables');
         results_xlsx = fullfile(tables_dir_check, [Cfg.SPEC_NAME, '_results.xlsx']);
-        erpt_xlsx    = fullfile(tables_dir_check, [Cfg.SPEC_NAME, '_erpt_table.xlsx']);
         ok_results_xlsx = isfile(results_xlsx);
-        ok_erpt_xlsx    = isfile(erpt_xlsx);
+        ok_erpt_sheet = false;
+        if ok_results_xlsx
+            try
+                sheet_names = sheetnames(results_xlsx);
+                ok_erpt_sheet = any(strcmpi(sheet_names, 'erpt_summary'));
+            catch
+                ok_erpt_sheet = false;
+            end
+        end
     else
         cirf_pngs = []; nivel_pngs = []; fevd_pngs = []; n_endo_expected = NaN;
         ok_no_cirf = false; ok_no_nivel = false; ok_fevd_all = false;
-        ok_results_xlsx = false; ok_erpt_xlsx = false;
+        ok_results_xlsx = false; ok_erpt_sheet = false;
     end
 
     ok_all = run_ok && ok_shock_idx && ok_irf_type && ok_bands && ok_no_cirf && ...
-        ok_no_nivel && ok_fevd_all && ok_results_xlsx && ok_erpt_xlsx;
+        ok_no_nivel && ok_fevd_all && ok_results_xlsx && ok_erpt_sheet;
     bloque4_ok = bloque4_ok && ok_all;
 
     fprintf('    corrida sin error          : %s\n', V{int32(run_ok)+1});
@@ -386,8 +396,8 @@ for aa = 1:numel(ANALISIS_FILES)
     fprintf('    sin cirf_*.png nuevas      : %s  (%d encontradas)\n', V{int32(ok_no_cirf)+1}, numel(cirf_pngs));
     fprintf('    sin nivel_*.png (Figura 2, descartada): %s  (%d encontradas)\n', V{int32(ok_no_nivel)+1}, numel(nivel_pngs));
     fprintf('    FEVD cubre TODAS las vars  : %s  (%d de %d esperadas)\n', V{int32(ok_fevd_all)+1}, numel(fevd_pngs), n_endo_expected);
-    fprintf('    <SPEC>_results.xlsx existe : %s\n', V{int32(ok_results_xlsx)+1});
-    fprintf('    <SPEC>_erpt_table.xlsx existe: %s\n', V{int32(ok_erpt_xlsx)+1});
+    fprintf('    <SPEC>_results.xlsx existe (UN solo archivo): %s\n', V{int32(ok_results_xlsx)+1});
+    fprintf('    hoja erpt_summary presente : %s\n', V{int32(ok_erpt_sheet)+1});
     fprintf('    >> %s: %s\n\n', fname, V{int32(ok_all)+1});
 
     % -- Cerrar figuras nuevas de esta iteracion para no acumular ventanas --
