@@ -1,6 +1,8 @@
 %VALIDATE_ERPT22  ERPT-Chat 22 -- Deuda de ERPT-Chat 20 + tabla de
-%   resultados de ERPT-Chat 21 (banda unica 68%, Figura 2 = nivel L(h),
-%   retiro de la CIRF generica, relabel de Figura 1).
+%   resultados de ERPT-Chat 21 (banda unica 68%, retiro de la CIRF
+%   generica, relabel de Figura 1). Figura 2 (nivel L(h)) se implemento y
+%   luego se DESCARTO dentro de este chat -- ver nota de cabecera en
+%   analisis_A.m.
 %
 %   Tipo S. No toca run_pfa.m / run_is.m / build_posterior.m / load_data.m
 %   -- 100% post-procesamiento sobre projects/erpt/ y draws ya cacheados
@@ -20,11 +22,15 @@
 %     BLOQUE 2 -- Sanity check de accumulate_level.m/resolve_aa_lag.m: (a)
 %                 test sintetico de la recursion aa (L(0)=IRF(0), L(h)=
 %                 IRF(h)+L(h-lag) para h>=lag) y de la rama mm (cumsum);
-%                 (b) L(0)=IRF(0) sobre datos reales cacheados (spec_A);
+%                 (b) L(0)=IRF(0) sobre datos reales cacheados (spec_A),
+%                 via accumulate_level.m directamente (build_level_response.m
+%                 fue borrado junto con Figura 2 -- ver nota arriba);
 %                 (c) comparacion informativa (NO assert de igualdad, ver
-%                 nota) entre razon-de-medianas de Level y la mediana-de-
+%                 nota) entre razon-de-medianas de L(h) y la mediana-de-
 %                 razones de ERPT (ERPT-Chat 1 decision 6: son objetos
-%                 estadisticos distintos por la desigualdad de Jensen).
+%                 estadisticos distintos por la desigualdad de Jensen) --
+%                 esta comparacion es tambien el origen del "diente de
+%                 sierra" que motivo descartar Figura 2 (ver analisis_A.m).
 %     BLOQUE 3 -- Smoke test del wiring erpt_run_spec.m <- local_run_spec
 %                 (ERPT-Chat 22, decision del usuario): confirma que las
 %                 2 combinaciones de opts usadas (validate_erpt15: quiet_
@@ -33,8 +39,9 @@
 %     BLOQUE 4 -- Tests funcionales de analisis_A/B/C.m (Bloque 1 de este
 %                 chat): cada uno se ejecuta completo (cache-only) y se
 %                 verifica: SHOCK_IDX/RESP_IDX/IRF_TYPE aplicados, ausencia
-%                 de nuevas figuras cirf_*.png, presencia de nivel_*.png
-%                 (Figura 2) y de irf_*.png con eje Y reetiquetado.
+%                 de cirf_*.png Y de nivel_*.png (ambos retirados del
+%                 reporte), irf_*.png con eje Y reetiquetado, y FEVD
+%                 cubriendo TODAS las variables endogenas.
 %     VEREDICTO GLOBAL
 %
 %   Ejecutar COMPLETO (F5). Pegar el output de consola en el chat.
@@ -169,48 +176,64 @@ bloque2_ok = bloque2_ok && ok_mm_syn;
 fprintf('  (a2) accumulate_level mm, sintetico == cumsum: %s\n', V{int32(ok_mm_syn)+1});
 
 % -- (b) L(0)=IRF(0) sobre datos reales cacheados (spec_A, choque Cam, imp_inf)
+%    NOTA (ERPT-Chat 22, decision del usuario): Figura 2 (nivel L(h)) y su
+%    helper build_level_response.m fueron implementados y luego
+%    DESCARTADOS en este chat (patron de "diente de sierra" real, ver nota
+%    de cabecera en analisis_A.m) -- este sanity check ya NO pasa por
+%    build_level_response.m (borrado); usa accumulate_level.m directamente
+%    sobre IRFs extraidas con select_irfs.m, exactamente como lo hace
+%    calculate_erpt.m internamente para la Tabla 1 oficial.
 Cfg_a = cargar_spec('spec_A_rob_aa_diffuse_lag4_v0');
 cache_a = fullfile(Cfg_a.OUTPUT_DIR, 'results_is.mat');
 if isfile(cache_a)
     [Results_a, ~, Dataset_a, Cfg_a_cached] = load_erpt_run(Cfg_a.OUTPUT_DIR);
     Cfg_a_cached.SHOCK_IDX = 1:3;
-    Level_a = build_level_response(Results_a, Dataset_a, Cfg_a_cached, 'aa', {'ner','imp_inf'});
 
-    endo_mask = strcmp(Dataset_a.var_roles, 'endogenous');
+    endo_mask   = strcmp(Dataset_a.var_roles, 'endogenous');
     var_names_a = Dataset_a.var_names(endo_mask);
     resp_idx_a  = [find(strcmp(var_names_a,'ner'),1), find(strcmp(var_names_a,'imp_inf'),1)];
     [irfs_by_shock_a, ~, ~, shock_idx_resolved_a] = ...
         select_irfs(Results_a.LtildeStruct, 1:3, resp_idx_a, Cfg_a_cached.SHOCK_NAMES);
+    lag_a = resolve_aa_lag(Dataset_a);
 
     ok_l0_real = true;
+    L_ner_by_shock = cell(1, numel(shock_idx_resolved_a));
+    L_imp_by_shock = cell(1, numel(shock_idx_resolved_a));
     for j = 1:numel(shock_idx_resolved_a)
+        L_ner_j = accumulate_level(irfs_by_shock_a{j}(:,1,:), 'aa', lag_a);
+        L_imp_j = accumulate_level(irfs_by_shock_a{j}(:,2,:), 'aa', lag_a);
+        L_ner_by_shock{j} = L_ner_j;
+        L_imp_by_shock{j} = L_imp_j;
+
         irf0_ner = quantile(reshape(irfs_by_shock_a{j}(1,1,:),1,[]), 0.50);
         irf0_imp = quantile(reshape(irfs_by_shock_a{j}(1,2,:),1,[]), 0.50);
-        L0_ner = Level_a.shocks(j).vars(1).median(1);
-        L0_imp = Level_a.shocks(j).vars(2).median(1);
+        L0_ner = quantile(reshape(L_ner_j(1,1,:),1,[]), 0.50);
+        L0_imp = quantile(reshape(L_imp_j(1,1,:),1,[]), 0.50);
         ok_l0_real = ok_l0_real && abs(L0_ner - irf0_ner) <= TOL && abs(L0_imp - irf0_imp) <= TOL;
     end
     bloque2_ok = bloque2_ok && ok_l0_real;
     fprintf('  (b) L(0)=IRF(0) sobre spec_A cacheada (ner, imp_inf, 3 choques): %s\n', V{int32(ok_l0_real)+1});
 
-    % -- (c) Comparacion informativa (NO assert): razon-de-medianas de Level
-    %    vs mediana-de-razones de ERPT, en los horizontes de la Tabla 1.
+    % -- (c) Comparacion informativa (NO assert): razon-de-medianas de L(h)
+    %    (via accumulate_level, el mismo objeto que Tabla 1) vs mediana-
+    %    de-razones de ERPT, en los horizontes de la Tabla 1.
     ERPT_a = calculate_erpt(Results_a, Dataset_a, Cfg_a_cached, 'aa');
     names_a = {ERPT_a.shocks.name};
-    fprintf('\n  (c) Informativo -- razon-de-medianas(Level) vs mediana-de-razones(ERPT):\n');
+    fprintf('\n  (c) Informativo -- razon-de-medianas(L(h)) vs mediana-de-razones(ERPT):\n');
     fprintf('      (se espera una diferencia pequena pero no-nula: son objetos\n');
     fprintf('       estadisticos distintos, ver ERPT-Chat 1 decision 6 / desigualdad de Jensen)\n');
     for kk = 1:numel(NAMED_SHOCKS)
         k_idx = find(strcmp(names_a, NAMED_SHOCKS{kk}), 1);
         if isempty(k_idx); continue; end
-        j_lvl = find([Level_a.shocks.idx] == ERPT_a.shocks(k_idx).idx, 1);
+        j_lvl = find(shock_idx_resolved_a == ERPT_a.shocks(k_idx).idx, 1);
         prices_arr = ERPT_a.shocks(k_idx).prices;
         p_idx = find(strcmp({prices_arr.var}, 'imp_inf'), 1);
         for hh_target = [3 6 12 24 36]
             h_erpt = find(ERPT_a.horizons == hh_target, 1);
-            h_lvl  = find(Level_a.horizons == hh_target, 1);
-            ratio_of_medians = Level_a.shocks(j_lvl).vars(2).median(h_lvl) / ...
-                                Level_a.shocks(j_lvl).vars(1).median(h_lvl);
+            h_idx_lvl = hh_target + 1;
+            med_ner = quantile(reshape(L_ner_by_shock{j_lvl}(h_idx_lvl,1,:),1,[]), 0.50);
+            med_imp = quantile(reshape(L_imp_by_shock{j_lvl}(h_idx_lvl,1,:),1,[]), 0.50);
+            ratio_of_medians = med_imp / med_ner;
             median_of_ratios = prices_arr(p_idx).median(h_erpt);
             fprintf('      %-4s h=%-2d  razon-de-medianas=%7.4f  mediana-de-razones(ERPT)=%7.4f  diff=%7.4f\n', ...
                 NAMED_SHOCKS{kk}, hh_target, ratio_of_medians, median_of_ratios, ...
@@ -225,7 +248,7 @@ end
 if bloque2_ok
     fprintf('  >> BLOQUE 2: PASA -- recursion sintetica y L(0)=IRF(0) verificados.\n\n');
 else
-    fprintf('  >> BLOQUE 2: NO PASA -- revisar accumulate_level.m/build_level_response.m.\n\n');
+    fprintf('  >> BLOQUE 2: NO PASA -- revisar accumulate_level.m/resolve_aa_lag.m.\n\n');
 end
 
 % =========================================================================
@@ -313,8 +336,11 @@ for aa = 1:numel(ANALISIS_FILES)
         cirf_pngs  = dir(fullfile(fig_dir_check, 'cirf_*.png'));
         nivel_pngs = dir(fullfile(fig_dir_check, 'nivel_*.png'));
         fevd_pngs  = dir(fullfile(fig_dir_check, 'fevd_var*.png'));
-        ok_no_cirf   = isempty(cirf_pngs);
-        ok_has_nivel = ~isempty(nivel_pngs);
+        ok_no_cirf  = isempty(cirf_pngs);
+        % -- Figura 2 (nivel L(h)) fue implementada y luego DESCARTADA en
+        %    este mismo chat (patron de "diente de sierra", decision del
+        %    usuario) -- no deben quedar ni generarse nivel_*.png --
+        ok_no_nivel = isempty(nivel_pngs);
 
         % -- FEVD debe cubrir TODAS las variables endogenas (decision de
         %    ERPT-Chat 16) -- Cfg.RESP_IDX se restringe arriba SOLO para
@@ -324,10 +350,10 @@ for aa = 1:numel(ANALISIS_FILES)
         ok_fevd_all = numel(fevd_pngs) == n_endo_expected;
     else
         cirf_pngs = []; nivel_pngs = []; fevd_pngs = []; n_endo_expected = NaN;
-        ok_no_cirf = false; ok_has_nivel = false; ok_fevd_all = false;
+        ok_no_cirf = false; ok_no_nivel = false; ok_fevd_all = false;
     end
 
-    ok_all = run_ok && ok_shock_idx && ok_irf_type && ok_bands && ok_no_cirf && ok_has_nivel && ok_fevd_all;
+    ok_all = run_ok && ok_shock_idx && ok_irf_type && ok_bands && ok_no_cirf && ok_no_nivel && ok_fevd_all;
     bloque4_ok = bloque4_ok && ok_all;
 
     fprintf('    corrida sin error          : %s\n', V{int32(run_ok)+1});
@@ -335,7 +361,7 @@ for aa = 1:numel(ANALISIS_FILES)
     fprintf('    Cfg.IRF_TYPE == ''irf''      : %s\n', V{int32(ok_irf_type)+1});
     fprintf('    Cfg.CRED_BANDS == [.16 .84]: %s\n', V{int32(ok_bands)+1});
     fprintf('    sin cirf_*.png nuevas      : %s  (%d encontradas)\n', V{int32(ok_no_cirf)+1}, numel(cirf_pngs));
-    fprintf('    con nivel_*.png (Figura 2) : %s  (%d encontradas)\n', V{int32(ok_has_nivel)+1}, numel(nivel_pngs));
+    fprintf('    sin nivel_*.png (Figura 2, descartada): %s  (%d encontradas)\n', V{int32(ok_no_nivel)+1}, numel(nivel_pngs));
     fprintf('    FEVD cubre TODAS las vars  : %s  (%d de %d esperadas)\n', V{int32(ok_fevd_all)+1}, numel(fevd_pngs), n_endo_expected);
     fprintf('    >> %s: %s\n\n', fname, V{int32(ok_all)+1});
 
