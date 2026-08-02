@@ -85,3 +85,31 @@ graficar_irf(Results, Dataset, Cfg, bandas);    % figura IRF (Figura 1: eje "p.p
 Cfg_fevd = Cfg;
 Cfg_fevd.RESP_IDX = [];
 graficar_fevd(Results, Dataset, Cfg_fevd);
+
+%% PASO 6 -- Exportar a Excel (IRF + FEVD completos, y Tabla ERPT)
+%   Round 6 (a pedido del usuario): la Tabla ERPT y el IRF/FEVD nunca se
+%   guardaban en disco, solo se veian en consola/PNG. Se agregan 2 archivos
+%   en <Cfg.OUTPUT_DIR>/tables/:
+%     - <SPEC_NAME>_results.xlsx  -- via export_results.m (core, Chat 10):
+%       hojas metadata/irf_summary/fevd_summary/run_diagnostics, TODAS las
+%       variables endogenas (no solo las 3 de Figura 1 -- se usa Cfg_fevd,
+%       sin RESP_IDX, para que fevd_summary e irf_summary del Excel cubran
+%       las 6 variables; export_results comparte un unico RESP_IDX para
+%       ambas hojas, asi que no se puede tener el Excel restringido a
+%       precios para IRF y sin restringir para FEVD en el mismo archivo).
+%       Cfg.IRF_TYPE='irf' ya excluye cirf_summary (retirada, Chat 21).
+%       Sin Cfg.EXPORT_HORIZONS -- exporta TODOS los horizontes (0:36).
+%     - <SPEC_NAME>_erpt_table.xlsx -- Tabla ERPT (formato tidy), via
+%       build_erpt_comparison_long.m (projects/erpt/src, ya existia desde
+%       ERPT-Chat 4/8), reusada aqui con un solo spec. Cubre TODOS los
+%       horizontes definidos en Cfg.ERPT_HORIZONS.
+export_results(Results, Dataset, Cfg_fevd);
+
+ERPT_by_spec_A = struct();
+ERPT_by_spec_A.(spec) = ERPT;
+T_erpt_A = build_erpt_comparison_long(ERPT_by_spec_A, {spec}, shocks);
+tables_dir_A = fullfile(Cfg.OUTPUT_DIR, 'tables');
+if ~isfolder(tables_dir_A); mkdir(tables_dir_A); end
+erpt_xlsx_A = fullfile(tables_dir_A, [Cfg.SPEC_NAME, '_erpt_table.xlsx']);
+writetable(T_erpt_A, erpt_xlsx_A);
+fprintf('  Tabla ERPT exportada: %s\n\n', erpt_xlsx_A);
