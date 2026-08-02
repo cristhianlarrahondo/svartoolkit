@@ -12,7 +12,7 @@
 spec       = 'spec_B_rob_aa_diffuse_lag4_tot_v0';     % ganadora + ToT (7a variable)
 bandas     = [0.16 0.84];                             % 68% -- banda unica de reporte (Chat 21)
 usar_cache = true;
-shocks     = {'Cam','Dem','Ofe'};                     % choques nombrados
+shocks     = {'Exchange Rate','Demand','Supply'};                     % choques nombrados
 precio     = {'imp_inf','pro_inf','con_inf'};         % las 3 inflaciones del sistema
 
 %% PASO 1 -- Cargar especificacion y datos
