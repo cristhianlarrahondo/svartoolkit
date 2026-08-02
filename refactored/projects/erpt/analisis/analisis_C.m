@@ -10,7 +10,13 @@
 %   analisis_A.m).
 
 %% PASO 0 -- Botones (edita aqui)
-inflacion  = 'importados';            % 'importados' | 'productor' | 'consumidor'
+if ~exist('inflacion', 'var') || isempty(inflacion)
+    inflacion  = 'importados';        % 'importados' | 'productor' | 'consumidor'
+end
+% -- Permite que un llamador externo (p.ej. validate_erpt22.m, para correr
+%    los 3 sistemas en un solo loop) preseteé `inflacion` ANTES de correr
+%    este script; si no, el default de siempre es 'importados' (uso
+%    manual normal: editar el boton de PASO 0 y correr por secciones/F5).
 bandas     = [0.16 0.84];             % 68% -- banda unica de reporte (Chat 21)
 usar_cache = true;                    % true = reusar estimacion previa si existe
 
