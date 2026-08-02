@@ -38,7 +38,7 @@ function graficar_irf(Results, Dataset, Cfg, bandas)
 
     if do_relabel
         p_relabel_irf_y(Results.LtildeStruct, Cfg, ...
-            'puntos porcentuales de inflacion anual');
+            'percentage points of annual inflation');
     end
 end
 
@@ -111,6 +111,9 @@ function p_relabel_irf_y(LtildeStruct, Cfg, ylabel_text)
         ax_all = findall(hFig, 'Type', 'axes');
         for a = 1:numel(ax_all)
             ylabel(ax_all(a), ylabel_text);
+            if isprop(ax_all(a), 'Toolbar') && ~isempty(ax_all(a).Toolbar)
+                ax_all(a).Toolbar.Visible = 'off';
+            end
         end
 
         shock_name_safe = regexprep(label_shock, '[^a-zA-Z0-9_]', '_');
