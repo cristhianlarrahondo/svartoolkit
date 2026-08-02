@@ -25,6 +25,19 @@ Cfg.RESP_IDX  = [2 3 4];             % Figura 1: solo las 3 inflaciones (imp_inf
 Cfg.IRF_TYPE  = 'irf';               % sin CIRF generica (retirada, Chat 21 decision 2)
 fprintf('\n=== Ejercicio A (ganadora) | spec: %s ===\n', spec);
 
+% -- Limpiar figuras cirf_*.png de corridas anteriores (pre-Chat 22): la
+%    CIRF generica esta retirada del reporte "sin excepcion, ni siquiera
+%    como anexo" (ERPT-Chat 21 decision 2) -- no deben quedar archivos
+%    viejos en disco que puedan colarse por error a la carpeta del paper.
+old_cirf_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+old_cirf = dir(fullfile(old_cirf_dir, 'cirf_*.png'));
+for kk = 1:numel(old_cirf)
+    delete(fullfile(old_cirf(kk).folder, old_cirf(kk).name));
+end
+if ~isempty(old_cirf)
+    fprintf('  [limpieza] %d figura(s) cirf_*.png retirada(s) de %s\n\n', numel(old_cirf), old_cirf_dir);
+end
+
 %% PASO 2 -- Estimar el SVAR bayesiano (o cargar si ya se estimo)
 cache = fullfile(Cfg.OUTPUT_DIR, 'results_is.mat');
 if usar_cache && exist(cache, 'file')
@@ -55,9 +68,14 @@ mostrar_erpt(ERPT, shocks, precio);
 
 %% PASO 4 -- Respuestas al impulso (IRF, Figura 1) y nivel acumulado (Figura 2)
 mostrar_irf(Results, Dataset, Cfg, bandas);     % tabla IRF (Figura 1)
-graficar_irf(Results, Dataset, Cfg, bandas);    % figura IRF (Figura 1: eje "pp de inflacion anual")
+graficar_irf(Results, Dataset, Cfg, bandas);    % figura IRF (Figura 1: eje "percentage points of annual inflation")
 mostrar_nivel(Results, Dataset, Cfg, bandas);   % tabla nivel L(h) (Figura 2)
 graficar_nivel(Results, Dataset, Cfg, bandas);  % figura nivel L(h) (Figura 2, incluye panel ner)
 
 %% PASO 5 -- Descomposicion de varianza (FEVD, todas las variables/choques)
-graficar_fevd(Results, Dataset, Cfg);
+%   Cfg.RESP_IDX se restringio arriba SOLO para Figura 1 (IRF); FEVD debe
+%   cubrir TODAS las variables endogenas (decision de ERPT-Chat 16, bug
+%   ya documentado alli) -- se usa una copia de Cfg sin RESP_IDX.
+Cfg_fevd = Cfg;
+Cfg_fevd.RESP_IDX = [];
+graficar_fevd(Results, Dataset, Cfg_fevd);
