@@ -17,11 +17,11 @@ usar_cache = true;                    % true = reusar estimacion previa si exist
 % -- mapa: tipo de inflacion -> spec, choques (en orden) y variable de precio --
 switch inflacion
     case 'importados'
-        spec = 'spec_C_rob_aa_diffuse_lag4_imp_v0'; precio = {'imp_inf'}; shocks = {'Cam','Ofe','Dem'};
+        spec = 'spec_C_rob_aa_diffuse_lag4_imp_v0'; precio = {'imp_inf'}; shocks = {'Exchange Rate','Supply','Demand'};
     case 'productor'
-        spec = 'spec_C_rob_aa_diffuse_lag4_pro_v0'; precio = {'pro_inf'}; shocks = {'Cam','Dem','Ofe'};
+        spec = 'spec_C_rob_aa_diffuse_lag4_pro_v0'; precio = {'pro_inf'}; shocks = {'Exchange Rate','Demand','Supply'};
     case 'consumidor'
-        spec = 'spec_C_rob_aa_diffuse_lag4_con_v0'; precio = {'con_inf'}; shocks = {'Cam','Dem','Ofe'};
+        spec = 'spec_C_rob_aa_diffuse_lag4_con_v0'; precio = {'con_inf'}; shocks = {'Exchange Rate','Demand','Supply'};
     otherwise
         error('inflacion no valida. Usa: importados | productor | consumidor');
 end
