@@ -5,11 +5,18 @@
 %   Requisito: correr iniciar.m UNA VEZ en la sesion.
 %   Referencia ERPT a h=3 (mediana): importados ~0.49 | productor ~0.16 | consumidor ~0.03
 %
-%   ERPT-Chat 22: banda unica 68% en todo el reporte (Tabla ERPT, Figura 1,
-%   Figura 2 -- ERPT-Chat 21 decision 1); choques mostrados restringidos a
-%   los 3 nombrados Cam/Dem/Ofe (loose end de ERPT-Chat 20); CIRF generica
-%   (cumsum) retirada sin reemplazo directo -- Figura 2 (nivel L(h)) la
-%   sustituye para variables a/a (ERPT-Chat 21 decision 2).
+%   ERPT-Chat 22: banda unica 68% en todo el reporte (Tabla ERPT, Figura 1
+%   -- ERPT-Chat 21 decision 1); choques mostrados restringidos a los 3
+%   nombrados Cam/Dem/Ofe (loose end de ERPT-Chat 20); CIRF generica
+%   (cumsum) retirada "sin excepcion, ni siquiera como anexo" (ERPT-Chat 21
+%   decision 2). Figura 2 (nivel L(h)) se implemento y luego se DESCARTO
+%   dentro de este mismo chat, tras revisar la figura resultante: el
+%   objeto exhibe un patron de "diente de sierra" period-12 -- real,
+%   matematicamente correcto dado que la recursion reconstruye un nivel
+%   mensual a partir de un SVAR estimado directamente sobre a/a (no sobre
+%   niveles mensuales), pero el usuario decidio no incluirla en el reporte.
+%   No queda reemplazo de la CIRF: el reporte de A queda con Tabla ERPT +
+%   Figura 1 + FEVD unicamente.
 
 %% PASO 0 -- Botones (edita aqui)
 spec       = 'spec_A_rob_aa_diffuse_lag4_v0';         % ganadora del barrido
@@ -25,17 +32,18 @@ Cfg.RESP_IDX  = [2 3 4];             % Figura 1: solo las 3 inflaciones (imp_inf
 Cfg.IRF_TYPE  = 'irf';               % sin CIRF generica (retirada, Chat 21 decision 2)
 fprintf('\n=== Ejercicio A (ganadora) | spec: %s ===\n', spec);
 
-% -- Limpiar figuras cirf_*.png de corridas anteriores (pre-Chat 22): la
-%    CIRF generica esta retirada del reporte "sin excepcion, ni siquiera
-%    como anexo" (ERPT-Chat 21 decision 2) -- no deben quedar archivos
-%    viejos en disco que puedan colarse por error a la carpeta del paper.
-old_cirf_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
-old_cirf = dir(fullfile(old_cirf_dir, 'cirf_*.png'));
-for kk = 1:numel(old_cirf)
-    delete(fullfile(old_cirf(kk).folder, old_cirf(kk).name));
+% -- Limpiar figuras cirf_*.png (retirada, Chat 21 decision 2) y
+%    nivel_*.png (Figura 2, implementada y luego descartada en este mismo
+%    chat -- ver nota de cabecera) de corridas anteriores: no deben quedar
+%    archivos viejos en disco que puedan colarse por error a la carpeta
+%    del paper.
+old_fig_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+old_stale = [dir(fullfile(old_fig_dir, 'cirf_*.png')); dir(fullfile(old_fig_dir, 'nivel_*.png'))];
+for kk = 1:numel(old_stale)
+    delete(fullfile(old_stale(kk).folder, old_stale(kk).name));
 end
-if ~isempty(old_cirf)
-    fprintf('  [limpieza] %d figura(s) cirf_*.png retirada(s) de %s\n\n', numel(old_cirf), old_cirf_dir);
+if ~isempty(old_stale)
+    fprintf('  [limpieza] %d figura(s) retirada(s) (cirf_*/nivel_*) de %s\n\n', numel(old_stale), old_fig_dir);
 end
 
 %% PASO 2 -- Estimar el SVAR bayesiano (o cargar si ya se estimo)
@@ -66,11 +74,9 @@ ERPT = calculate_erpt(Results, Dataset, Cfg, 'aa');
 %% PASO 3 -- Exchange Rate Pass-Through (el resultado principal)
 mostrar_erpt(ERPT, shocks, precio);
 
-%% PASO 4 -- Respuestas al impulso (IRF, Figura 1) y nivel acumulado (Figura 2)
+%% PASO 4 -- Respuestas al impulso (IRF, Figura 1)
 mostrar_irf(Results, Dataset, Cfg, bandas);     % tabla IRF (Figura 1)
 graficar_irf(Results, Dataset, Cfg, bandas);    % figura IRF (Figura 1: eje "percentage points of annual inflation")
-mostrar_nivel(Results, Dataset, Cfg, bandas);   % tabla nivel L(h) (Figura 2)
-graficar_nivel(Results, Dataset, Cfg, bandas);  % figura nivel L(h) (Figura 2, incluye panel ner)
 
 %% PASO 5 -- Descomposicion de varianza (FEVD, todas las variables/choques)
 %   Cfg.RESP_IDX se restringio arriba SOLO para Figura 1 (IRF); FEVD debe
