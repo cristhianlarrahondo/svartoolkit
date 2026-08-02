@@ -19,7 +19,7 @@
 %% PASO 0 -- Botones (edita aqui)
 WIN_SPEC = 'spec_A_rob_aa_diffuse_lag4_v0';   % ganadora (ERPT-Chat 15/16), como referencia
 bandas   = [0.16 0.84];                       % 68% -- banda unica de reporte (Chat 21)
-shocks   = {'Cam', 'Dem', 'Ofe'};
+shocks   = {'Exchange Rate', 'Demand', 'Supply'};
 
 spec_names = { ...
     'spec_A_base_aa_diffuse_lag2_v0',   'spec_A_base_aa_diffuse_lag4_v0', ...
@@ -55,8 +55,16 @@ for ss = 1:n_specs
     transform_type = 'mm';
     if contains(sn, '_aa_'); transform_type = 'aa'; end
 
-    % -- Recalcular ERPT a bandas 68% (post-proceso, sin re-estimar) --
-    Cfg_ss.CRED_BANDS = bandas;
+    % -- Forzar SHOCK_NAMES uniforme en ingles (round 4): Cfg_ss viene del
+    %    CACHE (results_is.mat), persistido bajo la convencion antigua en
+    %    espanol (Cam/Dem/Ofe) -- las 16 specs del Ejercicio A comparten el
+    %    mismo orden posicional (1=Cambiario, 2=Demanda, 3=Oferta, ver
+    %    spec_A_rob_aa_diffuse_lag4_v0.m), asi que forzar esta convencion
+    %    es seguro y necesario para que coincida con `shocks` (arriba) --
+    %    Cfg.SHOCK_NAMES solo afecta labels/matching por nombre, nunca la
+    %    seleccion de datos (confirmado en select_irfs.m/resolve_shock_name.m).
+    Cfg_ss.SHOCK_NAMES = {'Exchange Rate', 'Demand', 'Supply'};
+    Cfg_ss.CRED_BANDS  = bandas;
     ERPT_ss = calculate_erpt(Results_ss, Dataset_ss, Cfg_ss, transform_type);
 
     ERPT_by_spec.(sn)    = ERPT_ss;
