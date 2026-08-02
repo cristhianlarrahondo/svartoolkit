@@ -154,7 +154,7 @@ Cfg.PLOT_IRFS        = true;
 Cfg.SUMMARY_HORIZONS = [0 4 8 12 18 24];
 Cfg.CRED_BANDS       = [0.25 0.75];    % identico a la ganadora
 Cfg.SHOCK_IDX        = 'all';
-Cfg.SHOCK_NAMES      = {'Cam', 'Dem', 'Ofe'};
+Cfg.SHOCK_NAMES      = {'Exchange Rate', 'Demand', 'Supply'};   % ERPT-Chat 22: labels en ingles para figuras/leyendas (internamente eran Cam/Dem/Ofe)
 Cfg.IRF_TYPE         = 'both';   % irf, cirf, both
 Cfg.IRF_NORM         = 'none';
 Cfg.FEVD_HORIZONS    = 1:Cfg.HORIZON;
@@ -163,3 +163,4 @@ Cfg.FEVD_HORIZONS    = 1:Cfg.HORIZON;
 Cfg.ERPT_PRICE_VARS = {'imp_inf', 'pro_inf', 'con_inf'};
 Cfg.ERPT_DENOM_VAR  = 'ner';
 Cfg.ERPT_HORIZONS   = [3 6 12 24 36];
+
