@@ -308,18 +308,26 @@ for aa = 1:numel(ANALISIS_FILES)
         ok_shock_idx = false; ok_irf_type = false; ok_bands = false; ok_has_outdir = false;
     end
 
-    if ok_has_outdir
+    if ok_has_outdir && exist('Dataset', 'var') == 1
         fig_dir_check = fullfile(Cfg.OUTPUT_DIR, 'figures');
         cirf_pngs  = dir(fullfile(fig_dir_check, 'cirf_*.png'));
         nivel_pngs = dir(fullfile(fig_dir_check, 'nivel_*.png'));
+        fevd_pngs  = dir(fullfile(fig_dir_check, 'fevd_var*.png'));
         ok_no_cirf   = isempty(cirf_pngs);
         ok_has_nivel = ~isempty(nivel_pngs);
+
+        % -- FEVD debe cubrir TODAS las variables endogenas (decision de
+        %    ERPT-Chat 16) -- Cfg.RESP_IDX se restringe arriba SOLO para
+        %    Figura 1 (IRF); si se filtrara por error a FEVD, este check
+        %    lo detecta (bug real encontrado en la 1a corrida de este chat).
+        n_endo_expected = sum(strcmp(Dataset.var_roles, 'endogenous'));
+        ok_fevd_all = numel(fevd_pngs) == n_endo_expected;
     else
-        cirf_pngs = []; nivel_pngs = [];
-        ok_no_cirf = false; ok_has_nivel = false;
+        cirf_pngs = []; nivel_pngs = []; fevd_pngs = []; n_endo_expected = NaN;
+        ok_no_cirf = false; ok_has_nivel = false; ok_fevd_all = false;
     end
 
-    ok_all = run_ok && ok_shock_idx && ok_irf_type && ok_bands && ok_no_cirf && ok_has_nivel;
+    ok_all = run_ok && ok_shock_idx && ok_irf_type && ok_bands && ok_no_cirf && ok_has_nivel && ok_fevd_all;
     bloque4_ok = bloque4_ok && ok_all;
 
     fprintf('    corrida sin error          : %s\n', V{int32(run_ok)+1});
@@ -328,6 +336,7 @@ for aa = 1:numel(ANALISIS_FILES)
     fprintf('    Cfg.CRED_BANDS == [.16 .84]: %s\n', V{int32(ok_bands)+1});
     fprintf('    sin cirf_*.png nuevas      : %s  (%d encontradas)\n', V{int32(ok_no_cirf)+1}, numel(cirf_pngs));
     fprintf('    con nivel_*.png (Figura 2) : %s  (%d encontradas)\n', V{int32(ok_has_nivel)+1}, numel(nivel_pngs));
+    fprintf('    FEVD cubre TODAS las vars  : %s  (%d de %d esperadas)\n', V{int32(ok_fevd_all)+1}, numel(fevd_pngs), n_endo_expected);
     fprintf('    >> %s: %s\n\n', fname, V{int32(ok_all)+1});
 
     % -- Cerrar figuras nuevas de esta iteracion para no acumular ventanas --
