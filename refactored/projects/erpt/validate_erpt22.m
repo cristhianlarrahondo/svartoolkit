@@ -37,13 +37,16 @@
 %                 cfg=true/compute_frac_top=false; validate_erpt17/19:
 %                 defaults) cargan cache correctamente y devuelven out.ok.
 %     BLOQUE 4 -- Tests funcionales de analisis_A/B/C.m (Bloque 1 de este
-%                 chat): cada uno se ejecuta completo (cache-only) y se
-%                 verifica: SHOCK_IDX/RESP_IDX/IRF_TYPE aplicados, ausencia
-%                 de cirf_*.png Y de nivel_*.png (ambos retirados del
-%                 reporte), irf_*.png con eje Y reetiquetado, FEVD
-%                 cubriendo TODAS las variables endogenas, y (round 6)
-%                 existencia de <SPEC>_results.xlsx (export_results.m) y
-%                 <SPEC>_erpt_table.xlsx (Tabla ERPT).
+%                 chat): 5 tareas -- A, B, y los 3 sistemas de C
+%                 (importados/productor/consumidor, presets via `inflacion`
+%                 -- antes solo se corria el default 'importados' de
+%                 analisis_C.m; correccion del usuario). Cada uno se
+%                 ejecuta completo (cache-only) y se verifica: SHOCK_IDX/
+%                 RESP_IDX/IRF_TYPE aplicados, ausencia de cirf_*.png Y de
+%                 nivel_*.png (ambos retirados del reporte), irf_*.png con
+%                 eje Y reetiquetado, FEVD cubriendo TODAS las variables
+%                 endogenas, y existencia de <SPEC>_results.xlsx (incluida
+%                 la hoja erpt_summary, Tabla ERPT).
 %     VEREDICTO GLOBAL
 %
 %   Ejecutar COMPLETO (F5). Pegar el output de consola en el chat.
@@ -308,23 +311,41 @@ fprintf('======================================================\n');
 fprintf('  BLOQUE 4 -- Tests funcionales de analisis_A/B/C.m\n');
 fprintf('======================================================\n\n');
 
-ANALISIS_FILES = {'analisis_A.m', 'analisis_B.m', 'analisis_C.m'};
+% -- 5 tareas: A, B, y los 3 sistemas de C (antes solo se corria el
+%    default de analisis_C.m, 'importados' -- ver correccion del usuario).
+%    `inflacion_preset` vacio = no tocar la variable (A/B no la usan).
+TASKS = struct('file', {}, 'inflacion_preset', {});
+TASKS(1) = struct('file', 'analisis_A.m', 'inflacion_preset', '');
+TASKS(2) = struct('file', 'analisis_B.m', 'inflacion_preset', '');
+TASKS(3) = struct('file', 'analisis_C.m', 'inflacion_preset', 'importados');
+TASKS(4) = struct('file', 'analisis_C.m', 'inflacion_preset', 'productor');
+TASKS(5) = struct('file', 'analisis_C.m', 'inflacion_preset', 'consumidor');
+
 bloque4_ok = true;
-KEEP_VARS = {'ANALISIS_FILES', 'ANALISIS_DIR', 'bloque1_ok', 'bloque2_ok', ...
+KEEP_VARS = {'TASKS', 'ANALISIS_DIR', 'bloque1_ok', 'bloque2_ok', ...
     'bloque3_ok', 'bloque4_ok', 'aa', 'BANDS_NEW', 'V', 'TOL', 'PROJ_ROOT', ...
     'PROJECTS_ROOT', 'REF_ROOT', 'PROJ_CFG', 'PROJ_SRC', 'REF_SRC', ...
     'REF_CFG_DIR', 'REF_HELP', 'REF_VALIDATE', 'NAMED_SHOCKS', 'SPECS_CHECK', ...
     'log_path_diary', 'val_file', 'KEEP_VARS', 'fname', 'apath', 'fig_before'};
 
-for aa = 1:numel(ANALISIS_FILES)
-    fname = ANALISIS_FILES{aa};
-    fprintf('  --- Ejecutando %s (cache-only, usar_cache=true en el archivo) ---\n', fname);
+for aa = 1:numel(TASKS)
+    fname = TASKS(aa).file;
     apath = fullfile(ANALISIS_DIR, fname);
 
     % -- Limpiar variables de la iteracion anterior ANTES de correr, para
     %    que un fallo temprano de `run(apath)` no deje pasar por error un
     %    Cfg/Results de la corrida previa --
     clearvars('-except', KEEP_VARS{:});
+
+    % -- Presetear `inflacion` ANTES de correr analisis_C.m (el archivo ya
+    %    respeta un valor preexistente en vez de sobreescribirlo -- ver
+    %    ERPT-Chat 22, correccion del usuario) --
+    if ~isempty(TASKS(aa).inflacion_preset)
+        inflacion = TASKS(aa).inflacion_preset; %#ok<NASGU>
+        fprintf('  --- Ejecutando %s (inflacion=''%s'', cache-only) ---\n', fname, TASKS(aa).inflacion_preset);
+    else
+        fprintf('  --- Ejecutando %s (cache-only, usar_cache=true en el archivo) ---\n', fname);
+    end
 
     fig_before = findall(0, 'Type', 'figure');
     try
@@ -398,7 +419,11 @@ for aa = 1:numel(ANALISIS_FILES)
     fprintf('    FEVD cubre TODAS las vars  : %s  (%d de %d esperadas)\n', V{int32(ok_fevd_all)+1}, numel(fevd_pngs), n_endo_expected);
     fprintf('    <SPEC>_results.xlsx existe (UN solo archivo): %s\n', V{int32(ok_results_xlsx)+1});
     fprintf('    hoja erpt_summary presente : %s\n', V{int32(ok_erpt_sheet)+1});
-    fprintf('    >> %s: %s\n\n', fname, V{int32(ok_all)+1});
+    if ~isempty(TASKS(aa).inflacion_preset)
+        fprintf('    >> %s (%s): %s\n\n', fname, TASKS(aa).inflacion_preset, V{int32(ok_all)+1});
+    else
+        fprintf('    >> %s: %s\n\n', fname, V{int32(ok_all)+1});
+    end
 
     % -- Cerrar figuras nuevas de esta iteracion para no acumular ventanas --
     fig_after = findall(0, 'Type', 'figure');
