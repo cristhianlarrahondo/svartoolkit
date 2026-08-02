@@ -36,17 +36,18 @@
 %                 2 combinaciones de opts usadas (validate_erpt15: quiet_
 %                 cfg=true/compute_frac_top=false; validate_erpt17/19:
 %                 defaults) cargan cache correctamente y devuelven out.ok.
-%     BLOQUE 4 -- Tests funcionales de analisis_A/B/C.m (Bloque 1 de este
-%                 chat): 5 tareas -- A, B, y los 3 sistemas de C
-%                 (importados/productor/consumidor, presets via `inflacion`
-%                 -- antes solo se corria el default 'importados' de
-%                 analisis_C.m; correccion del usuario). Cada uno se
-%                 ejecuta completo (cache-only) y se verifica: SHOCK_IDX/
-%                 RESP_IDX/IRF_TYPE aplicados, ausencia de cirf_*.png Y de
-%                 nivel_*.png (ambos retirados del reporte), irf_*.png con
-%                 eje Y reetiquetado, FEVD cubriendo TODAS las variables
-%                 endogenas, y existencia de <SPEC>_results.xlsx (incluida
-%                 la hoja erpt_summary, Tabla ERPT).
+%     BLOQUE 4 -- Tests funcionales de analisis_A/B/C.m: 3 tareas -- A, B,
+%                 C (round 9: analisis_C.m ahora corre los 3 sistemas --
+%                 importados/productor/consumidor -- en UN solo loop
+%                 interno, ya no expone el boton `inflacion`; A y B siguen
+%                 siendo do-files independientes para revisarse uno a la
+%                 vez). La verificacion de cada spec (sin cirf_*.png/
+%                 nivel_*.png, FEVD con TODAS las variables endogenas,
+%                 <SPEC>_results.xlsx con hoja erpt_summary) se hace por
+%                 archivo en disco via p_check_spec_outputs -- para C, el
+%                 Cfg/Dataset del workspace tras `run()` solo refleja el
+%                 ultimo sistema del loop (consumidor), asi que los 3
+%                 specs se verifican por separado.
 %     VEREDICTO GLOBAL
 %
 %   Ejecutar COMPLETO (F5). Pegar el output de consola en el chat.
@@ -311,41 +312,31 @@ fprintf('======================================================\n');
 fprintf('  BLOQUE 4 -- Tests funcionales de analisis_A/B/C.m\n');
 fprintf('======================================================\n\n');
 
-% -- 5 tareas: A, B, y los 3 sistemas de C (antes solo se corria el
-%    default de analisis_C.m, 'importados' -- ver correccion del usuario).
-%    `inflacion_preset` vacio = no tocar la variable (A/B no la usan).
-TASKS = struct('file', {}, 'inflacion_preset', {});
-TASKS(1) = struct('file', 'analisis_A.m', 'inflacion_preset', '');
-TASKS(2) = struct('file', 'analisis_B.m', 'inflacion_preset', '');
-TASKS(3) = struct('file', 'analisis_C.m', 'inflacion_preset', 'importados');
-TASKS(4) = struct('file', 'analisis_C.m', 'inflacion_preset', 'productor');
-TASKS(5) = struct('file', 'analisis_C.m', 'inflacion_preset', 'consumidor');
+% -- 3 tareas: A, B, C (round 9: C ahora corre los 3 sistemas -- importados/
+%    productor/consumidor -- en UNA sola ejecucion internamente, ya no hay
+%    que invocarlo 3 veces con `inflacion` preseteada). Como analisis_C.m
+%    deja en el workspace solo el ULTIMO sistema de su loop interno
+%    (consumidor), la verificacion de C se hace por archivo en disco para
+%    los 3 specs, no leyendo el Cfg/Dataset final del workspace.
+TASKS = {'analisis_A.m', 'analisis_B.m', 'analisis_C.m'};
+C_SPECS = {'spec_C_rob_aa_diffuse_lag4_imp_v0', ...
+           'spec_C_rob_aa_diffuse_lag4_pro_v0', ...
+           'spec_C_rob_aa_diffuse_lag4_con_v0'};
 
 bloque4_ok = true;
-KEEP_VARS = {'TASKS', 'ANALISIS_DIR', 'bloque1_ok', 'bloque2_ok', ...
+KEEP_VARS = {'TASKS', 'C_SPECS', 'ANALISIS_DIR', 'bloque1_ok', 'bloque2_ok', ...
     'bloque3_ok', 'bloque4_ok', 'aa', 'BANDS_NEW', 'V', 'TOL', 'PROJ_ROOT', ...
     'PROJECTS_ROOT', 'REF_ROOT', 'PROJ_CFG', 'PROJ_SRC', 'REF_SRC', ...
     'REF_CFG_DIR', 'REF_HELP', 'REF_VALIDATE', 'NAMED_SHOCKS', 'SPECS_CHECK', ...
     'log_path_diary', 'val_file', 'KEEP_VARS', 'fname', 'apath', 'fig_before'};
 
 for aa = 1:numel(TASKS)
-    fname = TASKS(aa).file;
+    fname = TASKS{aa};
     apath = fullfile(ANALISIS_DIR, fname);
+    fprintf('  --- Ejecutando %s (cache-only, usar_cache=true en el archivo) ---\n', fname);
 
-    % -- Limpiar variables de la iteracion anterior ANTES de correr, para
-    %    que un fallo temprano de `run(apath)` no deje pasar por error un
-    %    Cfg/Results de la corrida previa --
+    % -- Limpiar variables de la iteracion anterior ANTES de correr --
     clearvars('-except', KEEP_VARS{:});
-
-    % -- Presetear `inflacion` ANTES de correr analisis_C.m (el archivo ya
-    %    respeta un valor preexistente en vez de sobreescribirlo -- ver
-    %    ERPT-Chat 22, correccion del usuario) --
-    if ~isempty(TASKS(aa).inflacion_preset)
-        inflacion = TASKS(aa).inflacion_preset; %#ok<NASGU>
-        fprintf('  --- Ejecutando %s (inflacion=''%s'', cache-only) ---\n', fname, TASKS(aa).inflacion_preset);
-    else
-        fprintf('  --- Ejecutando %s (cache-only, usar_cache=true en el archivo) ---\n', fname);
-    end
 
     fig_before = findall(0, 'Type', 'figure');
     try
@@ -356,74 +347,32 @@ for aa = 1:numel(TASKS)
         fprintf('  [ERROR] %s: %s\n', fname, ME.message);
     end
 
-    if run_ok && exist('Cfg', 'var') == 1
-        ok_shock_idx = isfield(Cfg, 'SHOCK_IDX') && isequal(Cfg.SHOCK_IDX, 1:3);
-        ok_irf_type  = isfield(Cfg, 'IRF_TYPE') && strcmpi(Cfg.IRF_TYPE, 'irf');
-        ok_bands     = isfield(Cfg, 'CRED_BANDS') && isequal(Cfg.CRED_BANDS, BANDS_NEW);
-        ok_has_outdir = isfield(Cfg, 'OUTPUT_DIR') && isfolder(fullfile(Cfg.OUTPUT_DIR, 'figures'));
-    else
-        ok_shock_idx = false; ok_irf_type = false; ok_bands = false; ok_has_outdir = false;
-    end
-
-    if ok_has_outdir && exist('Dataset', 'var') == 1
-        fig_dir_check = fullfile(Cfg.OUTPUT_DIR, 'figures');
-        cirf_pngs  = dir(fullfile(fig_dir_check, 'cirf_*.png'));
-        nivel_pngs = dir(fullfile(fig_dir_check, 'nivel_*.png'));
-        fevd_pngs  = dir(fullfile(fig_dir_check, 'fevd_var*.png'));
-        ok_no_cirf  = isempty(cirf_pngs);
-        % -- Figura 2 (nivel L(h)) fue implementada y luego DESCARTADA en
-        %    este mismo chat (patron de "diente de sierra", decision del
-        %    usuario) -- no deben quedar ni generarse nivel_*.png --
-        ok_no_nivel = isempty(nivel_pngs);
-
-        % -- FEVD debe cubrir TODAS las variables endogenas (decision de
-        %    ERPT-Chat 16) -- Cfg.RESP_IDX se restringe arriba SOLO para
-        %    Figura 1 (IRF); si se filtrara por error a FEVD, este check
-        %    lo detecta (bug real encontrado en la 1a corrida de este chat).
-        n_endo_expected = sum(strcmp(Dataset.var_roles, 'endogenous'));
-        ok_fevd_all = numel(fevd_pngs) == n_endo_expected;
-
-        % -- Round 7: exportacion a UN solo Excel (Tabla ERPT como hoja
-        %    erpt_summary, agregada al mismo <SPEC_NAME>_results.xlsx que
-        %    export_results.m ya genera para IRF/FEVD) -- antes no se
-        %    guardaba nada en disco, y en la 1a iteracion de esto quedaron
-        %    2 archivos separados por error (correccion del usuario).
-        tables_dir_check = fullfile(Cfg.OUTPUT_DIR, 'tables');
-        results_xlsx = fullfile(tables_dir_check, [Cfg.SPEC_NAME, '_results.xlsx']);
-        ok_results_xlsx = isfile(results_xlsx);
-        ok_erpt_sheet = false;
-        if ok_results_xlsx
-            try
-                sheet_names = sheetnames(results_xlsx);
-                ok_erpt_sheet = any(strcmpi(sheet_names, 'erpt_summary'));
-            catch
-                ok_erpt_sheet = false;
-            end
+    if strcmp(fname, 'analisis_C.m')
+        % -- C corre 3 sistemas internamente: verificar CADA UNO por
+        %    archivo en disco (Cfg/Dataset del workspace solo reflejan el
+        %    ultimo, consumidor) --
+        ok_all = run_ok;
+        for cc = 1:numel(C_SPECS)
+            [ok_cc, det_cc] = p_check_spec_outputs(C_SPECS{cc});
+            ok_all = ok_all && ok_cc;
+            fprintf('    [%-38s] %s\n', C_SPECS{cc}, det_cc);
         end
+        fprintf('    >> %s (3 sistemas): %s\n\n', fname, V{int32(ok_all)+1});
     else
-        cirf_pngs = []; nivel_pngs = []; fevd_pngs = []; n_endo_expected = NaN;
-        ok_no_cirf = false; ok_no_nivel = false; ok_fevd_all = false;
-        ok_results_xlsx = false; ok_erpt_sheet = false;
-    end
-
-    ok_all = run_ok && ok_shock_idx && ok_irf_type && ok_bands && ok_no_cirf && ...
-        ok_no_nivel && ok_fevd_all && ok_results_xlsx && ok_erpt_sheet;
-    bloque4_ok = bloque4_ok && ok_all;
-
-    fprintf('    corrida sin error          : %s\n', V{int32(run_ok)+1});
-    fprintf('    Cfg.SHOCK_IDX == 1:3       : %s\n', V{int32(ok_shock_idx)+1});
-    fprintf('    Cfg.IRF_TYPE == ''irf''      : %s\n', V{int32(ok_irf_type)+1});
-    fprintf('    Cfg.CRED_BANDS == [.16 .84]: %s\n', V{int32(ok_bands)+1});
-    fprintf('    sin cirf_*.png nuevas      : %s  (%d encontradas)\n', V{int32(ok_no_cirf)+1}, numel(cirf_pngs));
-    fprintf('    sin nivel_*.png (Figura 2, descartada): %s  (%d encontradas)\n', V{int32(ok_no_nivel)+1}, numel(nivel_pngs));
-    fprintf('    FEVD cubre TODAS las vars  : %s  (%d de %d esperadas)\n', V{int32(ok_fevd_all)+1}, numel(fevd_pngs), n_endo_expected);
-    fprintf('    <SPEC>_results.xlsx existe (UN solo archivo): %s\n', V{int32(ok_results_xlsx)+1});
-    fprintf('    hoja erpt_summary presente : %s\n', V{int32(ok_erpt_sheet)+1});
-    if ~isempty(TASKS(aa).inflacion_preset)
-        fprintf('    >> %s (%s): %s\n\n', fname, TASKS(aa).inflacion_preset, V{int32(ok_all)+1});
-    else
+        spec_name_check = '';
+        if run_ok && exist('Cfg', 'var') == 1 && isfield(Cfg, 'SPEC_NAME')
+            spec_name_check = Cfg.SPEC_NAME;
+        end
+        if ~isempty(spec_name_check)
+            [ok_all, det] = p_check_spec_outputs(spec_name_check);
+            ok_all = ok_all && run_ok;
+            fprintf('    %s\n', det);
+        else
+            ok_all = false;
+        end
         fprintf('    >> %s: %s\n\n', fname, V{int32(ok_all)+1});
     end
+    bloque4_ok = bloque4_ok && ok_all;
 
     % -- Cerrar figuras nuevas de esta iteracion para no acumular ventanas --
     fig_after = findall(0, 'Type', 'figure');
@@ -457,3 +406,54 @@ fprintf('Pegar este output completo en el chat para verificacion.\n\n');
 %% -- Cierre de diary ------------------------------------------------------
 diary('off');
 fprintf('[diary] Corrida persistida en:\n        %s\n\n', log_path_diary);
+
+
+%% ── Helpers locales ──────────────────────────────────────────────────────
+
+function [ok_all, detail] = p_check_spec_outputs(spec_name)
+%P_CHECK_SPEC_OUTPUTS  Verifica en disco (no en el workspace de la corrida)
+%   que un spec tenga: sin cirf_*.png/nivel_*.png, FEVD cubriendo TODAS las
+%   variables endogenas, y <SPEC_NAME>_results.xlsx con hoja erpt_summary.
+%   Round 9: analisis_C.m ahora corre 3 sistemas en un solo loop interno,
+%   asi que el Cfg/Dataset del workspace tras `run()` solo refleja el
+%   ULTIMO sistema -- esta funcion revisa cada spec de forma independiente,
+%   cargando su propio Cfg/Dataset via cargar_spec/load_erpt_run.
+    Cfg = cargar_spec(spec_name);
+    cache_path = fullfile(Cfg.OUTPUT_DIR, 'results_is.mat');
+    if ~isfile(cache_path)
+        ok_all = false;
+        detail = 'SIN CACHE -- no se pudo verificar (correr el analisis_*.m correspondiente primero)';
+        return;
+    end
+    [~, ~, Dataset] = load_erpt_run(Cfg.OUTPUT_DIR);
+
+    fig_dir = fullfile(Cfg.OUTPUT_DIR, 'figures');
+    cirf_pngs  = dir(fullfile(fig_dir, 'cirf_*.png'));
+    nivel_pngs = dir(fullfile(fig_dir, 'nivel_*.png'));
+    fevd_pngs  = dir(fullfile(fig_dir, 'fevd_var*.png'));
+    ok_no_cirf  = isempty(cirf_pngs);
+    ok_no_nivel = isempty(nivel_pngs);
+    n_endo_expected = sum(strcmp(Dataset.var_roles, 'endogenous'));
+    ok_fevd_all = numel(fevd_pngs) == n_endo_expected;
+
+    results_xlsx = fullfile(Cfg.OUTPUT_DIR, 'tables', [Cfg.SPEC_NAME, '_results.xlsx']);
+    ok_results_xlsx = isfile(results_xlsx);
+    ok_erpt_sheet = false;
+    if ok_results_xlsx
+        try
+            sheet_names = sheetnames(results_xlsx);
+            ok_erpt_sheet = any(strcmpi(sheet_names, 'erpt_summary'));
+        catch
+            ok_erpt_sheet = false;
+        end
+    end
+
+    ok_all = ok_no_cirf && ok_no_nivel && ok_fevd_all && ok_results_xlsx && ok_erpt_sheet;
+
+    V = {'FAIL', 'OK  '};
+    detail = sprintf(['sin cirf:%s  sin nivel:%s  FEVD %d/%d:%s  ' ...
+        'results.xlsx:%s  erpt_summary:%s  >> %s'], ...
+        V{int32(ok_no_cirf)+1}, V{int32(ok_no_nivel)+1}, ...
+        numel(fevd_pngs), n_endo_expected, V{int32(ok_fevd_all)+1}, ...
+        V{int32(ok_results_xlsx)+1}, V{int32(ok_erpt_sheet)+1}, V{int32(ok_all)+1});
+end
