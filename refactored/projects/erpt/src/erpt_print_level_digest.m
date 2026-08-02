@@ -21,7 +21,7 @@ end
 horizon_max = Level.horizons(end);
 h_valid = summary_horizons(summary_horizons >= 0 & summary_horizons <= horizon_max);
 if isempty(h_valid)
-    fprintf('[erpt_print_level_digest] Ningun horizonte solicitado esta dentro de [0, %d].\n', horizon_max);
+    fprintf('[erpt_print_level_digest] No requested horizon is within [0, %d].\n', horizon_max);
     return;
 end
 h_idx = h_valid + 1;   % Level.horizons(1) = horizonte 0
@@ -37,7 +37,7 @@ for j = 1:numel(Level.shocks)
     sh = Level.shocks(j);
 
     fprintf('\n%s\n', sep_wide);
-    fprintf('  NIVEL L(h) SUMMARY (Figura 2)   Shock: %s\n', sh.name);
+    fprintf('  LEVEL L(h) SUMMARY (Figure 2)   Shock: %s\n', sh.name);
     fprintf('%s\n', sep_wide);
 
     band_hdr = '';
@@ -45,7 +45,7 @@ for j = 1:numel(Level.shocks)
         band_hdr = [band_hdr, sprintf('  [p%.0f, p%.0f]         ', ...
             cred_bands(bb,1)*100, cred_bands(bb,2)*100)]; %#ok<AGROW>
     end
-    fprintf('  %-20s  h   %8s  %s\n', 'Variable', 'Mediana', strtrim(band_hdr));
+    fprintf('  %-20s  h   %8s  %s\n', 'Variable', 'Median', strtrim(band_hdr));
     fprintf('%s\n', sep_thin);
 
     for v = 1:numel(sh.vars)
