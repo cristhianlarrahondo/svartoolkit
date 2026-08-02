@@ -15,6 +15,8 @@ function graficar_irf(Results, Dataset, Cfg, bandas)
 %       "no poner titulos a los graficos" -- el pie de figura va en el
 %       paper, no en el PNG)
 %     - Resolucion de exportacion: 300 dpi (round 4, se veian pixeladas)
+%     - Grid del eje: apagado (round 5 -- se veia como una cuadricula a
+%       traves de la banda semi-transparente)
 %
 %   Si Cfg.RESP_IDX no esta definido (todas las variables, incluye ea/ir),
 %   no se aplica ningun post-proceso (paneles de unidades distintas).
@@ -114,7 +116,10 @@ function p_relabel_irf_y(LtildeStruct, Cfg, ylabel_text)
         end
         hFig = hFig(1);
 
-        % -- Ejes: ylabel uniforme + titulo de panel acortado + toolbar off
+        % -- Ejes: ylabel uniforme + titulo de panel acortado + sin grid +
+        %    toolbar off. El grid (core lo deja 'on' con GridAlpha=0.05) se
+        %    ve como una cuadricula a traves de la banda semi-transparente
+        %    (FaceAlpha 0.5) -- round 5, se retira.
         ax_all = findall(hFig, 'Type', 'axes');
         for a = 1:numel(ax_all)
             ylabel(ax_all(a), ylabel_text);
@@ -123,6 +128,7 @@ function p_relabel_irf_y(LtildeStruct, Cfg, ylabel_text)
                 short_title = regexprep(current_title, '\s*Inflation\s*$', '');
                 title(ax_all(a), short_title, 'Interpreter', 'none');
             end
+            grid(ax_all(a), 'off');
             if isprop(ax_all(a), 'Toolbar') && ~isempty(ax_all(a).Toolbar)
                 ax_all(a).Toolbar.Visible = 'off';
             end
