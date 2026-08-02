@@ -2,19 +2,24 @@ function graficar_irf(Results, Dataset, Cfg, bandas)
 %GRAFICAR_IRF  Figuras de IRF (y, si Cfg.IRF_TYPE lo pide, CIRF generica)
 %   por choque -- delega en plot_irfs.m (core).
 %
-%   ERPT-Chat 22, decision del usuario: el relabel del eje Y de Figura 1
-%   ("puntos porcentuales de inflacion anual") se resuelve ENTERAMENTE del
-%   lado ERPT (post-proceso: reabrir la figura recien creada, agregar
-%   ylabel, re-guardar el PNG con el MISMO nombre) -- NO se toca
-%   plot_irfs.m (core, compartido con BNW/oil_market).
+%   ERPT-Chat 22, decision del usuario: TODO el post-proceso visual de
+%   Figura 1 se resuelve ENTERAMENTE del lado ERPT (reabrir la figura
+%   recien creada, editar, re-guardar el PNG con el MISMO nombre) -- NO se
+%   toca plot_irfs.m (core, compartido con BNW/oil_market). Post-proceso
+%   aplicado (solo si Cfg.RESP_IDX esta restringido a variables de
+%   inflacion, unico caso en que TODOS los paneles comparten unidad):
+%     - Eje Y: "p.p. of annual inflation" (round 4, texto exacto pedido)
+%     - Titulo de cada panel: se quita el sufijo " Inflation" (Imports
+%       Inflation -> Imports; Producer Inflation -> Producer; etc.)
+%     - Titulo general de la figura (tiledlayout): se ELIMINA (round 4,
+%       "no poner titulos a los graficos" -- el pie de figura va en el
+%       paper, no en el PNG)
+%     - Resolucion de exportacion: 300 dpi (round 4, se veian pixeladas)
 %
-%   El relabel solo aplica cuando Cfg.RESP_IDX esta restringido a
-%   variables de precio (imp_inf/pro_inf/con_inf) -- unico caso en el que
-%   TODOS los paneles de la figura comparten la misma unidad de reporte.
 %   Si Cfg.RESP_IDX no esta definido (todas las variables, incluye ea/ir),
-%   no se aplica ningun relabel (paneles de unidades distintas).
+%   no se aplica ningun post-proceso (paneles de unidades distintas).
 %
-%   Ver tambien: plot_irfs.m (core), graficar_nivel.m (Figura 2)
+%   Ver tambien: plot_irfs.m (core)
 
     if nargin >= 4 && ~isempty(bandas); Cfg.CRED_BANDS = bandas; end
 
@@ -37,8 +42,7 @@ function graficar_irf(Results, Dataset, Cfg, bandas)
     plot_irfs(Results.LtildeStruct, Dataset, Cfg, Results);
 
     if do_relabel
-        p_relabel_irf_y(Results.LtildeStruct, Cfg, ...
-            'percentage points of annual inflation');
+        p_relabel_irf_y(Results.LtildeStruct, Cfg, 'p.p. of annual inflation');
     end
 end
 
@@ -89,9 +93,10 @@ function p_close_existing_irf_figs(LtildeStruct, Cfg)
 end
 
 function p_relabel_irf_y(LtildeStruct, Cfg, ylabel_text)
-%P_RELABEL_IRF_Y  Agrega `ylabel_text` a todos los paneles de cada figura
-%   IRF recien creada por plot_irfs.m, y re-guarda el PNG SOBRESCRIBIENDO
-%   el mismo archivo (mismo nombre/ruta que plot_irfs.m ya uso).
+%P_RELABEL_IRF_Y  Post-proceso de Figura 1 (round 4): eje Y uniforme,
+%   titulo general eliminado, titulos de panel acortados (sin "Inflation"),
+%   export a 300 dpi. Re-guarda el PNG SOBRESCRIBIENDO el mismo archivo
+%   (mismo nombre/ruta que plot_irfs.m ya uso).
     shock_idx   = p_resolve_shock_idx(LtildeStruct, Cfg);
     shock_names = p_resolve_shock_names(Cfg);
     fig_dir     = p_resolve_fig_dir(Cfg);
@@ -108,19 +113,33 @@ function p_relabel_irf_y(LtildeStruct, Cfg, ylabel_text)
             continue;   % shock omitido (p.ej. is_run_skipped en plot_irfs.m)
         end
         hFig = hFig(1);
+
+        % -- Ejes: ylabel uniforme + titulo de panel acortado + toolbar off
         ax_all = findall(hFig, 'Type', 'axes');
         for a = 1:numel(ax_all)
             ylabel(ax_all(a), ylabel_text);
+            current_title = get(get(ax_all(a), 'Title'), 'String');
+            if ischar(current_title) || iscellstr(current_title)
+                short_title = regexprep(current_title, '\s*Inflation\s*$', '');
+                title(ax_all(a), short_title, 'Interpreter', 'none');
+            end
             if isprop(ax_all(a), 'Toolbar') && ~isempty(ax_all(a).Toolbar)
                 ax_all(a).Toolbar.Visible = 'off';
             end
+        end
+
+        % -- Titulo general (tiledlayout): eliminar (round 4, "no poner
+        %    titulos a los graficos" -- el pie de figura va en el paper) --
+        tl_all = findobj(hFig, '-isa', 'matlab.graphics.layout.TiledChartLayout');
+        for t = 1:numel(tl_all)
+            title(tl_all(t), '');
         end
 
         shock_name_safe = regexprep(label_shock, '[^a-zA-Z0-9_]', '_');
         shock_tag       = sprintf('shock%d_%s', sidx, shock_name_safe);
         fname = fullfile(fig_dir, ['irf_', shock_tag, fig_suffix, '.png']);
         set(hFig, 'PaperPositionMode', 'auto');
-        print(hFig, fname, '-dpng');
-        fprintf('[graficar_irf] Eje Y reetiquetado y PNG re-guardado: %s\n', fname);
+        print(hFig, fname, '-dpng', '-r300');
+        fprintf('[graficar_irf] Post-procesada y re-guardada a 300dpi: %s\n', fname);
     end
 end
